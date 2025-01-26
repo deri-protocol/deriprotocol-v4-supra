@@ -1,0 +1,12 @@
+#!/bin/bash
+
+DEPLOYER=524ca96664241784ed52f630acb4c6cbfef47dd648cc3f40e0da161cca43acc4
+GATEWAY=524ca96664241784ed52f630acb4c6cbfef47dd648cc3f40e0da161cca43acc4
+PROFILE=deri1
+
+echo "create object and publish package"
+
+aptos move create-object-and-publish-package --address-name \
+deri --named-addresses \
+deployer=$DEPLOYER,gateway=$GATEWAY \
+--profile $PROFILE --assume-yes --included-artifacts none

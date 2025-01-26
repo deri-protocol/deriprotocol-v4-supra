@@ -1,0 +1,128 @@
+/**
+* @title lToken Contract
+* @dev pToken (NFT) contract designed to represent position for traders
+*      This contract allows for the creation and management of unique tokens representing ownership or
+*      participation in various activities within the ecosystem.
+*/
+module deri::ptoken {
+    use aptos_framework::event;
+    use aptos_framework::object::{Self, ExtendRef, Object};
+    use aptos_token_objects::collection::{Self, MutatorRef};
+    use aptos_token_objects::token::{Self, BurnRef};
+    use deri::global_state;
+    use std::bcs;
+    use std::option;
+    use std::signer;
+    use std::string;
+
+    friend deri::gateway;
+
+    const PTOKEN_COLLECTION_NAME: vector<u8> = b"pToken Collection";
+    const PTOKEN_COLLECTION_DESC: vector<u8> = b"pToken Collection";
+
+    /// TODO: update later
+    const URI: vector<u8> = b"";
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    struct CollectionConfig has key {
+        creator: ExtendRef,
+        // For modifying the NFT collection's name, description or image uri in case.
+        mutator_ref: MutatorRef,
+        total_minted: u64
+    }
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    // These are permissions to modify the NFT as Fungible Assets
+    struct PToken has key {
+        burn_ref: BurnRef
+    }
+
+    #[event]
+    struct PTokenMinted has drop, store {
+        nft: Object<PToken>,
+        to: address
+    }
+
+    #[event]
+    struct PTokenBurned has drop, store {
+        nft: Object<PToken>,
+        from: address
+    }
+
+    fun init_module(deployer: &signer) {
+        // Create an unlimited NFT collection with no royalty
+        let creator =
+            &object::create_named_object(&global_state::config_signer(), PTOKEN_COLLECTION_NAME);
+        let collection =
+            &collection::create_unlimited_collection(
+                &object::generate_signer(creator),
+                string::utf8(PTOKEN_COLLECTION_NAME),
+                string::utf8(PTOKEN_COLLECTION_DESC),
+                option::none(), // No royalty
+                string::utf8(URI)
+            );
+        move_to(
+            deployer,
+            CollectionConfig {
+                creator: object::generate_extend_ref(creator),
+                mutator_ref: collection::generate_mutator_ref(collection),
+                total_minted: 0
+            }
+        );
+    }
+
+    #[view]
+    public fun collection_address(): address acquires CollectionConfig {
+        let creator_addr = signer::address_of(creator_signer());
+        collection::create_collection_address(
+            &creator_addr, &string::utf8(PTOKEN_COLLECTION_NAME)
+        )
+    }
+
+    #[view]
+    public fun total_minted(): u64 acquires CollectionConfig {
+        CollectionConfig[@deri].total_minted
+    }
+
+    friend fun mint(to: address): Object<PToken> acquires CollectionConfig {
+        let collection_config = &mut CollectionConfig[@deri];
+        collection_config.total_minted += 1;
+
+        let nft =
+            &token::create_named_token(
+                &object::generate_signer_for_extending(&collection_config.creator),
+                string::utf8(PTOKEN_COLLECTION_NAME),
+                string::utf8(b""),
+                string::utf8(bcs::to_bytes(&collection_config.total_minted)),
+                option::none(),
+                string::utf8(b"")
+            );
+
+        move_to(
+            &object::generate_signer(nft),
+            PToken { burn_ref: token::generate_burn_ref(nft) }
+        );
+
+        let transfer_ref = object::generate_transfer_ref(nft);
+        let linear_transfer_ref = object::generate_linear_transfer_ref(&transfer_ref);
+        object::transfer_with_ref(linear_transfer_ref, to);
+
+        event::emit(PTokenMinted { nft: object::object_from_constructor_ref(nft), to });
+
+        object::object_from_constructor_ref(nft)
+    }
+
+    friend fun burn(nft: Object<PToken>) acquires PToken {
+        let nft_addr = object::object_address(&nft);
+        let owner_address = object::owner(nft);
+        let ptoken = move_from<PToken>(nft_addr);
+        let PToken { burn_ref } = ptoken;
+        token::burn(burn_ref);
+
+        event::emit(PTokenBurned { nft, from: owner_address });
+    }
+
+    inline fun creator_signer(): &signer acquires CollectionConfig {
+        &object::generate_signer_for_extending(&CollectionConfig[@deri].creator)
+    }
+}
