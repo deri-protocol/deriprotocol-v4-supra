@@ -5,6 +5,7 @@
 *      participation in various activities within the ecosystem.
 */
 module deri::ltoken {
+    use aptos_framework::chain_id;
     use aptos_framework::event;
     use aptos_framework::object::{Self, ExtendRef, Object};
     use aptos_token_objects::collection::{Self, MutatorRef};
@@ -22,13 +23,15 @@ module deri::ltoken {
 
     /// TODO: update later
     const URI: vector<u8> = b"";
+    const UNIQUE_IDENTIFIER: u8 = 1;
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct CollectionConfig has key {
         creator: ExtendRef,
         // For modifying the NFT collection's name, description or image uri in case.
         mutator_ref: MutatorRef,
-        total_minted: u64
+        total_minted: u256,
+        base_token_id: u256
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -61,12 +64,14 @@ module deri::ltoken {
                 option::none(),
                 string::utf8(URI)
             );
+
         move_to(
             deployer,
             CollectionConfig {
                 creator: object::generate_extend_ref(creator),
                 mutator_ref: collection::generate_mutator_ref(collection),
-                total_minted: 0
+                total_minted: 0,
+                base_token_id: ((UNIQUE_IDENTIFIER as u256) << 248) + ((chain_id::get() as u256) << 160)
             }
         );
     }
@@ -80,11 +85,25 @@ module deri::ltoken {
     }
 
     #[view]
-    public fun total_minted(): u64 acquires CollectionConfig {
+    public fun get_token_address(token_id: u256): address acquires CollectionConfig {
+        let seed = token::create_token_seed(&string::utf8(LTOKEN_COLLECTION_NAME), &string::utf8(bcs::to_bytes(&token_id)));
+        let signer_addr = signer::address_of(creator_signer());
+        object::create_object_address(&signer_addr, seed)
+    }
+
+    #[view]
+    public fun owner(token_id: u256): address acquires CollectionConfig {
+        let nft_addr = get_token_address(token_id);
+        let nft = object::address_to_object<LToken>(nft_addr);
+        object::owner(nft)
+    }
+
+    #[view]
+    public fun total_minted(): u256 acquires CollectionConfig {
         borrow_global<CollectionConfig>(@deri).total_minted
     }
 
-    friend fun mint(to: address): Object<LToken> acquires CollectionConfig {
+    friend fun mint(to: address): u256 acquires CollectionConfig {
         let collection_config = &mut CollectionConfig[@deri];
         collection_config.total_minted += 1;
 
@@ -93,7 +112,7 @@ module deri::ltoken {
                 &object::generate_signer_for_extending(&collection_config.creator),
                 string::utf8(LTOKEN_COLLECTION_NAME),
                 string::utf8(b""),
-                string::utf8(bcs::to_bytes(&collection_config.total_minted)),
+                string::utf8(bcs::to_bytes(&(collection_config.base_token_id + collection_config.total_minted))),
                 option::none(),
                 string::utf8(b"")
             );
@@ -109,11 +128,12 @@ module deri::ltoken {
 
         event::emit(LTokenMinted { nft: object::object_from_constructor_ref(nft), to });
 
-        object::object_from_constructor_ref(nft)
+        collection_config.base_token_id + collection_config.total_minted
     }
 
-    friend fun burn(nft: Object<LToken>) acquires LToken {
-        let nft_addr = object::object_address(&nft);
+    friend fun burn(token_id: u256) acquires LToken, CollectionConfig {
+        let nft_addr = get_token_address(token_id);
+        let nft = object::address_to_object<LToken>(nft_addr);
         let owner_address = object::owner(nft);
         let ltoken = move_from<LToken>(nft_addr);
         let LToken { burn_ref } = ltoken;

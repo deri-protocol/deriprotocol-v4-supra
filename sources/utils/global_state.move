@@ -28,7 +28,7 @@ module deri::global_state {
             global_state_signer,
             GlobalState {
                 extend_ref: object::generate_extend_ref(global_state),
-                admin: @admin,
+                admin: signer::address_of(deployer),
                 pending_admin: @0x0
             }
         );

@@ -55,7 +55,7 @@ module deri::gateway {
         // b_token address => state
         b_token_states: SmartTable<address, BTokenState>,
         // d_token address => state
-        d_token_states: SmartTable<address, DTokenState>,
+        d_token_states: SmartTable<u256, DTokenState>,
         // actionId => executionFee
         execution_fees: ExecutionFee
     }
@@ -144,11 +144,11 @@ module deri::gateway {
     }
 
     // struct holding intermediate values passed around functions
-    struct Data<phantom T: key> has store, drop, copy {
+    struct Data has store, drop, copy {
         // Lp/Trader account address
         account: address,
         // Lp/Trader dTokenId
-        d_token: Object<T>,
+        d_token_id: u256,
         // Lp/Trader bToken address
         b_token: Object<Metadata>,
         // cumulative pnl on Gateway
@@ -185,17 +185,17 @@ module deri::gateway {
     #[event]
     struct RequestUpdateLiquidty has drop, store {
         request_id: u256,
-        l_token_id: address,
+        l_token_id: u256,
         liquidity: u256,
-        last_cumulative_pnl_on_engine: I256,
-        cumulative_pnl_on_gateway: I256,
+        last_cumulative_pnl_on_engine: String,
+        cumulative_pnl_on_gateway: String,
         remove_b_amount: u256
     }
 
     #[event]
     struct FinishAddLiquidity has drop, store {
         request_id: u256,
-        l_token_id: address,
+        l_token_id: u256,
         liquidity: u256,
         total_liquidity: u256
     }
@@ -203,7 +203,7 @@ module deri::gateway {
     #[event]
     struct FinishRemoveLiquidity has drop, store {
         request_id: u256,
-        l_token_id: address,
+        l_token_id: u256,
         liquidity: u256,
         total_liquidity: u256,
         b_token: address,
@@ -213,7 +213,7 @@ module deri::gateway {
     #[event]
     struct FinishAddMargin has drop, store {
         request_id: u256,
-        p_token_id: address,
+        p_token_id: u256,
         b_token: address,
         b_amount: u256
     }
@@ -221,17 +221,17 @@ module deri::gateway {
     #[event]
     struct RequestREmoveMargin has drop, store {
         request_id: u256,
-        p_token_id: address,
+        p_token_id: u256,
         real_money_margin: u256,
-        last_cumulative_pnl_on_engine: I256,
-        cumulative_pnl_on_gateway: I256,
+        last_cumulative_pnl_on_engine: String,
+        cumulative_pnl_on_gateway: String,
         b_amount: u256
     }
 
     #[event]
     struct FinishRemoveMargin has drop, store {
         request_id: u256,
-        p_token_id: address,
+        p_token_id: u256,
         b_token: address,
         b_amount: u256
     }
@@ -239,40 +239,40 @@ module deri::gateway {
     #[event]
     struct RequestTrade has drop, store {
         request_id: u256,
-        p_token_id: address,
+        p_token_id: u256,
         real_money_margin: u256,
-        last_cumulative_pnl_on_engine: I256,
-        cumulative_pnl_on_gateway: I256,
+        last_cumulative_pnl_on_engine: String,
+        cumulative_pnl_on_gateway: String,
         symbol_id: vector<u8>,
-        trade_params: vector<I256>
+        trade_params: vector<String>
     }
 
     #[event]
     struct RequestLiquidate has drop, store {
         request_id: u256,
-        p_token_id: address,
+        p_token_id: u256,
         real_money_margin: u256,
-        last_cumulative_pnl_on_engine: I256,
-        cumulative_pnl_on_gateway: I256,
+        last_cumulative_pnl_on_engine: String,
+        cumulative_pnl_on_gateway: String,
     }
 
     #[event]
     struct RequestTradeAndRemoveMargin has drop, store {
         request_id: u256,
-        p_token_id: address,
+        p_token_id: u256,
         real_money_margin: u256,
-        last_cumulative_pnl_on_engine: I256,
-        cumulative_pnl_on_gateway: I256,
+        last_cumulative_pnl_on_engine: String,
+        cumulative_pnl_on_gateway: String,
         b_amount: u256,
         symbol_id: vector<u8>,
-        trade_params: vector<I256>,
+        trade_params: vector<String>,
     }
 
     #[event]
     struct FinishLiquidate has drop, store {
         request_id: u256,
-        p_token_id: address,
-        lp_pnl: I256,
+        p_token_id: u256,
+        lp_pnl: String,
     }
 
     fun init_module(deployer: &signer) {
@@ -304,31 +304,149 @@ module deri::gateway {
     }
 
     #[view]
-    public fun get_gateway_param() {}
+    public fun get_gateway_param(): (
+        address,
+        Object<Metadata>,
+        address,
+        u256,
+        String,
+        String,
+        String,
+        address,
+        address
+    ) acquires GatewayParam {
+        let gateway_param = &GatewayParam[@deri];
+        (
+            gateway_param.vault0,
+            gateway_param.token_b0,
+            gateway_param.d_chain_event_signer,
+            gateway_param.b0_reserve_ratio,
+            gateway_param.liquidation_reward_cut_ratio.to_string(),
+            gateway_param.min_liquidation_reward.to_string(),
+            gateway_param.max_liquidation_reward.to_string(),
+            gateway_param.protocol_fee_manager,
+            gateway_param.liq_claim
+        )
+    }
 
     #[view]
-    public fun get_gateway_state() {}
+    public fun get_gateway_state(): (
+        vector<address>,
+        String,
+        u256,
+        u256,
+        String,
+        u256,
+        u256,
+        u256,
+        u256
+    ) acquires GatewayStorage {
+        let gateway_storage = &GatewayStorage[@deri].gateway_state;
+        (
+            gateway_storage.vaults,
+            gateway_storage.cumulative_pnl_on_gateway.to_string(),
+            gateway_storage.liquidity_time,
+            gateway_storage.total_liquidity,
+            gateway_storage.cumulative_time_per_liquidity.to_string(),
+            gateway_storage.gateway_request_id,
+            gateway_storage.d_chain_execution_fee_per_request,
+            gateway_storage.total_i_chain_execution_fee,
+            gateway_storage.cumulative_collected_protocol_fee
+        )
+    }
 
     #[view]
-    public fun get_b_token_state(b_token: Object<Metadata>) {}
+    public fun get_b_token_state(b_token: Object<Metadata>): (address, String, u256) acquires GatewayStorage {
+        let gateway_storage = &GatewayStorage[@deri];
+        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&b_token));
+        (
+            b_token_state.vault,
+            b_token_state.oracle_id,
+            b_token_state.collateral_factor
+        )
+    }
 
     #[view]
-    public fun get_lp_state(lp: Object<LToken>) {}
+    public fun get_lp_state(l_token_id: u256): (
+        u256,
+        Object<Metadata>,
+        u256,
+        String,
+        String,
+        u256,
+        u256,
+        u256,
+        u256,
+        u256,
+    ) acquires GatewayStorage {
+        let gateway_storage = &GatewayStorage[@deri];
+        let d_token_state = gateway_storage.d_token_states.borrow(l_token_id);
+        let b_token_addr = object::object_address(&d_token_state.b_token);
+        let b_token_state = gateway_storage.b_token_states.borrow(b_token_addr);
+
+        (
+            d_token_state.request_id,
+            d_token_state.b_token,
+            vault::get_balance(object::address_to_object(b_token_state.vault), l_token_id),
+            d_token_state.b0_amount.to_string(),
+            d_token_state.last_cumulative_pnl_on_engine.to_string(),
+            d_token_state.liquidity,
+            d_token_state.cumulative_time,
+            d_token_state.last_cumulative_time_per_liquidity,
+            d_token_state.last_request_i_chain_execution_fee,
+            d_token_state.cumulative_unused_i_chain_execution_fee
+        )
+
+    }
 
     #[view]
-    public fun get_td_state(td: Object<PToken>) {}
+    public fun get_td_state(p_token_id: u256): (
+        u256,
+        Object<Metadata>,
+        u256,
+        String,
+        String,
+        bool,
+        u256,
+        u256
+    ) acquires GatewayStorage {
+        let gateway_storage = &GatewayStorage[@deri];
+        let d_token_state = gateway_storage.d_token_states.borrow(p_token_id);
+        let b_token_addr = object::object_address(&d_token_state.b_token);
+        let b_token_state = gateway_storage.b_token_states.borrow(b_token_addr);
+
+        (
+            d_token_state.request_id,
+            d_token_state.b_token,
+            vault::get_balance(object::address_to_object(b_token_state.vault), p_token_id),
+            d_token_state.b0_amount.to_string(),
+            d_token_state.last_cumulative_pnl_on_engine.to_string(),
+            d_token_state.single_position,
+            d_token_state.last_request_i_chain_execution_fee,
+            d_token_state.cumulative_unused_i_chain_execution_fee
+        )
+    }
 
     #[view]
-    public fun get_cumulative_time(l_token: Object<LToken>): (u256, u256) acquires GatewayStorage {
+    public fun get_cumulative_time(l_token_id: u256): (u256, u256) acquires GatewayStorage {
         let gateway_storage = &GatewayStorage[@deri];
         let gateway_state = &gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow(object::object_address(&l_token));
+        let d_token_state = gateway_storage.d_token_states.borrow(l_token_id);
 
         get_cumulative_time_internal(gateway_state, d_token_state)
     }
 
     #[view]
-    public fun get_execution_fee() {}
+    public fun get_execution_fee(): vector<u256> acquires GatewayStorage {
+        let execution_fees = &GatewayStorage[@deri].execution_fees;
+        vector[
+            execution_fees.request_add_liquidity,
+            execution_fees.request_remove_liquidity,
+            execution_fees.request_remove_margin,
+            execution_fees.request_trade,
+            execution_fees.request_trade_and_remove_margin
+        ]
+    }
 
     //////////////////////// Setters ////////////////////////
 
@@ -347,10 +465,10 @@ module deri::gateway {
     ) acquires GatewayStorage {
         global_state::assert_is_admin(admin);
 
-        let gateway_storage = &mut GatewayStorage[@deri];
-
         // create vault0 for token_b0
         let vault = vault::create_vault(vault0_asset);
+
+        let gateway_storage = &mut GatewayStorage[@deri];
         let vault_addr = object::object_address(&vault);
         gateway_storage.gateway_state.vaults.push_back(vault_addr);
 
@@ -467,34 +585,35 @@ module deri::gateway {
 
     //////////////////////// Interactions ////////////////////////
 
+    public entry fun finish_collect_protocol_fee() {}
+
     /// Request to add liquidity with specified base token.
     public entry fun request_add_liquidity(
         user: &signer,
-        l_token: Object<LToken>,
+        l_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256
     ) acquires GatewayStorage, GatewayParam {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
         let user_address = signer::address_of(user);
-        let l_token_address = object::object_address(&l_token);
         let b_token_address = object::object_address(&b_token);
-        if (object::object_address(&l_token) == ZERO_ADDRESS) {
-            l_token = ltoken::mint(user_address);
+        if (l_token_id == 0) {
+            l_token_id = ltoken::mint(user_address);
         } else {
-            check_ltoken_id_owner(l_token, user_address);
+            check_l_token_id_owner(l_token_id, user_address);
         };
-        check_btoken_initialized(&gateway_storage.b_token_states, b_token);
+        check_b_token_initialized(&gateway_storage.b_token_states, b_token);
 
         let b_token_state = gateway_storage.b_token_states.borrow(b_token_address);
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&l_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_id);
         let data =
             get_data_and_check_b_token_consistency(
                 &gateway_storage.gateway_state,
                 b_token_state,
                 d_token_state,
                 user_address,
-                l_token,
+                l_token_id,
                 b_token
             );
 
@@ -505,7 +624,7 @@ module deri::gateway {
         assert!(b_amount != 0, EINVALID_BTOKEN_AMOUNT);
 
         let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
-        deposit<LToken>(&mut data, b_token_asset, gateway_param);
+        deposit(&mut data, b_token_asset, gateway_param);
         data.get_ex_params(b_token_state, gateway_param);
 
         let new_liquidity = data.get_d_token_liquidity();
@@ -519,10 +638,10 @@ module deri::gateway {
         event::emit(
             RequestUpdateLiquidty {
                 request_id,
-                l_token_id: l_token_address,
+                l_token_id,
                 liquidity: new_liquidity,
-                last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine,
-                cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway,
+                last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine.to_string(),
+                cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
                 remove_b_amount: 0
             }
         )
@@ -531,32 +650,31 @@ module deri::gateway {
     /// Request to remove liquidity with specified base token.
     public entry fun request_remove_liquidity(
         user: &signer,
-        l_token: Object<LToken>,
+        l_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256
     ) acquires GatewayStorage, GatewayParam {
         let user_address = signer::address_of(user);
-        let l_token_address = object::object_address(&l_token);
         let b_token_address = object::object_address(&b_token);
-        check_ltoken_id_owner(l_token, user_address);
+        check_l_token_id_owner(l_token_id, user_address);
 
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
         let gateway_state = &mut gateway_storage.gateway_state;
         let b_token_state = gateway_storage.b_token_states.borrow(b_token_address);
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&l_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_id);
 
         // receive_execution_fee(d_token_state, gateway_state, );
         assert!(b_amount != 0, EINVALID_BTOKEN_AMOUNT);
 
 
-        let data = get_data<LToken>(
+        let data = get_data(
             &gateway_storage.gateway_state,
             b_token_state,
             d_token_state,
             user_address,
-            l_token,
+            l_token_id,
             b_token
         );
 
@@ -575,17 +693,17 @@ module deri::gateway {
             new_liquidity = 0;
         };
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address<LToken>(&data.d_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(data.d_token_id);
         d_token_state.current_operate_token = b_token_address;
         let request_id = increment_request_id(&mut gateway_storage.gateway_state, d_token_state);
 
         event::emit(
             RequestUpdateLiquidty {
                 request_id,
-                l_token_id: l_token_address,
+                l_token_id,
                 liquidity: new_liquidity,
-                last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine,
-                cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway,
+                last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine.to_string(),
+                cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
                 remove_b_amount: b_amount
             }
         )
@@ -594,53 +712,53 @@ module deri::gateway {
     // Request to add margin with specified base token.
     public entry fun request_add_margin(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256,
         single_position: bool
     ) acquires GatewayStorage, GatewayParam {
-        request_add_margin_internal(user, p_token, b_token, b_amount, single_position);
+        request_add_margin_internal(user, p_token_id, b_token, b_amount, single_position);
     }
 
     public entry fun request_add_mergin_b0(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         b0_amount: u256
     ) acquires GatewayParam, GatewayStorage {
         let user_addr = signer::address_of(user);
         assert!(b0_amount > 0, EINVALID_BTOKEN_AMOUNT);
-        check_ptoken_id_owner(p_token, user_addr);
+        check_p_token_id_owner(p_token_id, user_addr);
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
         let token_b0 = gateway_param.token_b0;
 
         let b0_asset = primary_fungible_store::withdraw(user, token_b0, (b0_amount as u64));
-        vault::deposit<PToken>(
+        vault::deposit(
             object::address_to_object(gateway_param.vault0),
-            object::address_to_object(ZERO_ADDRESS),
+            p_token_id,
             b0_asset
         );
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         d_token_state.b0_amount = i256::wrapping_add(d_token_state.b0_amount, i256::from(b0_amount));
     }
 
     /// Request to remove margin with specified base token.
     public entry fun request_remove_margin(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256
     ) acquires GatewayStorage, GatewayParam {
         let user_addr = signer::address_of(user);
         assert!(b_amount > 0, EINVALID_BTOKEN_AMOUNT);
-        check_ptoken_id_owner(p_token, user_addr);
+        check_p_token_id_owner(p_token_id, user_addr);
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
         let gateway_state = &mut gateway_storage.gateway_state;
         let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&b_token));
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
 
         // TODO
         // _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTREMOVEMARGIN]);
@@ -650,7 +768,7 @@ module deri::gateway {
             b_token_state,
             d_token_state,
             user_addr,
-            p_token,
+            p_token_id,
             b_token
         );
         data.get_ex_params(b_token_state, gateway_param);
@@ -663,10 +781,10 @@ module deri::gateway {
 
         event::emit(RequestREmoveMargin {
             request_id,
-            p_token_id: object::object_address(&p_token),
+            p_token_id,
             real_money_margin: new_margin,
-            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine,
-            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway,
+            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine.to_string(),
+            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
             b_amount
         })
     }
@@ -674,41 +792,41 @@ module deri::gateway {
     /// Request to initiate a trade using a specified PToken, symbol identifier, and trade parameters.
     public entry fun request_trade(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         symbol_id: vector<u8>,
         trade_params: vector<u256>
     ) acquires GatewayStorage, GatewayParam {
         let user_addr = signer::address_of(user);
-        check_ptoken_id_owner(p_token, user_addr);
+        check_p_token_id_owner(p_token_id, user_addr);
 
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
         // TODO: receive_execution_fee(p_token, gateway_state, gateway_param);
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
 
-        let data = get_data<PToken>(
+        let data = get_data(
             &gateway_storage.gateway_state,
             b_token_state,
             d_token_state,
             user_addr,
-            p_token,
+            p_token_id,
             gateway_param.token_b0
         );
         data.get_ex_params(b_token_state, gateway_param);
 
         let real_money_margin = data.get_d_token_liquidity();
         let request_id = increment_request_id(&mut gateway_storage.gateway_state, d_token_state);
-        let trade_params_i265 = trade_params.map(|x| i256::from(x));
+        let trade_params_i265 = trade_params.map(|x| i256::from(x).to_string());
 
         event::emit(RequestTrade {
             request_id,
-            p_token_id: object::object_address(&p_token),
+            p_token_id,
             real_money_margin,
-            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine,
-            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway,
+            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine.to_string(),
+            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
             symbol_id,
             trade_params: trade_params_i265
         })
@@ -717,20 +835,20 @@ module deri::gateway {
     /// Request to liquidate a specified PToken.
     public entry fun request_liquidate(
         user: &signer,
-        p_token: Object<PToken>
+        p_token_id: u256
     ) acquires GatewayStorage, GatewayParam {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
 
-        let data = get_data<PToken>(
+        let data = get_data(
             &gateway_storage.gateway_state,
             b_token_state,
             d_token_state,
-            object::owner(p_token),
-            p_token,
+            ptoken::owner(p_token_id),
+            p_token_id,
             gateway_param.token_b0
         );
         data.get_ex_params(b_token_state, gateway_param);
@@ -740,31 +858,31 @@ module deri::gateway {
 
         event::emit(RequestLiquidate {
             request_id,
-            p_token_id: object::object_address(&p_token),
+            p_token_id,
             real_money_margin,
-            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine,
-            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway,
+            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine.to_string(),
+            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
         })
     }
 
     /// Request to add margin and initiate a trade in a single transaction.
     public entry fun request_add_margin_and_trade(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256,
         symbol_id: vector<u8>,
         trade_params: vector<u256>,
         single_position: bool
     ) acquires GatewayStorage, GatewayParam {
-        p_token = request_add_margin_internal(user, p_token, b_token, b_amount, single_position);
-        request_trade(user, p_token, symbol_id, trade_params);
+        p_token_id = request_add_margin_internal(user, p_token_id, b_token, b_amount, single_position);
+        request_trade(user, p_token_id, symbol_id, trade_params);
     }
 
     /// Request to initiate a trade and simultaneously remove margin from a specified PToken.
     public entry fun request_trade_and_remove_margin(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256,
         symbol_id: vector<u8>,
@@ -772,22 +890,22 @@ module deri::gateway {
     ) acquires GatewayStorage, GatewayParam {
         let user_addr = signer::address_of(user);
         assert!(b_amount > 0, EINVALID_BTOKEN_AMOUNT);
-        check_ptoken_id_owner(p_token, user_addr);
+        check_p_token_id_owner(p_token_id, user_addr);
 
         // TODO: receive_execution_fee(p_token, gateway_state, gateway_param);
 
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&b_token));
 
-        let data = get_data<PToken>(
+        let data = get_data(
             &gateway_storage.gateway_state,
             b_token_state,
             d_token_state,
             user_addr,
-            p_token,
+            p_token_id,
             b_token
         );
         data.get_ex_params(b_token_state, gateway_param);
@@ -802,13 +920,13 @@ module deri::gateway {
 
         event::emit(RequestTradeAndRemoveMargin {
             request_id,
-            p_token_id: object::object_address(&p_token),
+            p_token_id,
             real_money_margin: new_margin,
-            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine,
-            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway,
+            last_cumulative_pnl_on_engine: data.last_cumulative_pnl_on_engine.to_string(),
+            cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
             b_amount,
             symbol_id,
-            trade_params: trade_params.map(|x| i256::from(x))
+            trade_params: trade_params.map(|x| i256::from(x).to_string())
         })
     }
 
@@ -818,20 +936,19 @@ module deri::gateway {
     public entry fun finish_update_liquidity(
         user: &signer,
         request_id: u256,
-        l_token: Object<LToken>,
+        l_token_id: u256,
         liquidity: u256,
         total_liquidity: u256,
         cumulative_pnl_on_gateway: u256,
         b_amount_to_remove: u256,
         signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
-        let l_token_addr = object::object_address(&l_token);
         // TODO: verify signature
 
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_addr);
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_id);
 
         check_request_id(d_token_state, request_id);
         update_liquidity(gateway_state, d_token_state, liquidity, total_liquidity);
@@ -842,8 +959,8 @@ module deri::gateway {
             gateway_state,
             b_token_state,
             d_token_state,
-            object::owner(l_token),
-            l_token,
+            ltoken::owner(l_token_id),
+            l_token_id,
             d_token_state.b_token
         );
 
@@ -871,9 +988,9 @@ module deri::gateway {
                 assert!(operate_token == object::object_address(&gateway_param.token_b0));
 
                 if (i256::is_greater_than_zero(data.b0_amount)) {
-                    let b0_amount_removed_asset = vault::redeem<LToken>(
+                    let b0_amount_removed_asset = vault::redeem(
                         object::address_to_object<Vault>(gateway_param.vault0),
-                        object::address_to_object(ZERO_ADDRESS),
+                        0,
                         safe_math256::min(b_amount_removed, i256::as_u256(data.b0_amount))
                     );
                     let b0_amount_removed = (fungible_asset::amount(&b0_amount_removed_asset) as u256);
@@ -903,7 +1020,7 @@ module deri::gateway {
             // If bAmountToRemove == 0, it is a AddLiqudiity finalization
             event::emit(FinishAddLiquidity {
                 request_id,
-                l_token_id: l_token_addr,
+                l_token_id,
                 liquidity,
                 total_liquidity
             })
@@ -911,7 +1028,7 @@ module deri::gateway {
             // If bAmountToRemove != 0, it is a RemoveLiquidity finalization
             event::emit(FinishRemoveLiquidity {
                 request_id,
-                l_token_id: l_token_addr,
+                l_token_id,
                 liquidity,
                 total_liquidity,
                 b_token: operate_token,
@@ -924,20 +1041,19 @@ module deri::gateway {
     public entry fun finish_remove_margin(
         user: &signer,
         request_id: u256,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         required_margin: u256,
         cumulative_pnl_on_gateway: u256,
         b_amount_to_remove: u256,
         signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
-        let p_token_addr = object::object_address(&p_token);
         let user_addr = signer::address_of(user);
         // TODO: verify signature
 
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_addr);
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
 
         check_request_id(d_token_state, request_id);
@@ -946,7 +1062,7 @@ module deri::gateway {
             b_token_state,
             d_token_state,
             user_addr,
-            p_token,
+            p_token_id,
             d_token_state.b_token
         );
         let (diff, _) = i256::overflowing_sub(
@@ -967,7 +1083,7 @@ module deri::gateway {
 
         event::emit(FinishRemoveMargin {
             request_id,
-            p_token_id: p_token_addr,
+            p_token_id,
             b_token: object::object_address(&data.b_token),
             b_amount
         })
@@ -980,27 +1096,26 @@ module deri::gateway {
         executor: address,
         finisher: address,
         request_id: u256,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         cumulative_pnl_on_gateway: u256,
         maintenance_margin_required: u256,
         signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
         let user_addr = signer::address_of(user);
-        let p_token_addr = object::object_address(&p_token);
         // TODO: verify signature
 
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_addr);
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
 
         let data = get_data_and_check_b_token_consistency(
             &gateway_storage.gateway_state,
             b_token_state,
             d_token_state,
-            object::owner(p_token),
-            p_token,
+            ptoken::owner(p_token_id),
+            p_token_id,
             d_token_state.b_token
         );
         let (diff, _) = i256::overflowing_sub(
@@ -1017,7 +1132,7 @@ module deri::gateway {
         {
             let b_asset = vault::redeem(
                 object::address_to_object<Vault>(data.vault),
-                data.d_token,
+                data.d_token_id,
                 MAX_AS_U256
             );
             let b_amount = (fungible_asset::amount(&b_asset) as u256);
@@ -1038,7 +1153,7 @@ module deri::gateway {
             gateway_param.min_liquidation_reward,
             gateway_param.max_liquidation_reward
         );
-        let (reward, b0_amount_in) = process_reward<PToken>(
+        let (reward, b0_amount_in) = process_reward(
             gateway_param,
             gateway_param.token_b0,
             gateway_param.vault0,
@@ -1053,9 +1168,9 @@ module deri::gateway {
             let gateway_b_store = gateway_param.gateway_stores.borrow(gateway_param.token_b0);
             let gateway_b_signer = &object::generate_signer_for_extending(&gateway_b_store.store_extend_ref);
             let b0_asset = fungible_asset::withdraw(gateway_b_signer, gateway_b_store.store, (b0_amount_in as u64));
-            vault::deposit<PToken>(
+            vault::deposit(
                 object::address_to_object<Vault>(gateway_param.vault0),
-                object::address_to_object(ZERO_ADDRESS),
+                0,
                 b0_asset
             );
         };
@@ -1081,12 +1196,12 @@ module deri::gateway {
             gateway_state.total_i_chain_execution_fee = gateway_state.total_i_chain_execution_fee - last_request_ichain_execution_fee + cumulative_unused_i_chain_execution_fee
         };
 
-        ptoken::burn(p_token);
+        ptoken::burn(p_token_id);
 
         event::emit(FinishLiquidate {
             request_id,
-            p_token_id: p_token_addr,
-            lp_pnl
+            p_token_id,
+            lp_pnl: lp_pnl.to_string(),
         })
     }
 
@@ -1094,69 +1209,68 @@ module deri::gateway {
 
     fun request_add_margin_internal(
         user: &signer,
-        p_token: Object<PToken>,
+        p_token_id: u256,
         b_token: Object<Metadata>,
         b_amount: u256,
         single_position: bool
-    ): Object<PToken> acquires GatewayStorage, GatewayParam {
-        let p_token_addr = object::object_address(&p_token);
+    ): u256 acquires GatewayStorage, GatewayParam {
         let user_addr = signer::address_of(user);
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
         assert!(b_amount > 0, EINVALID_BTOKEN_AMOUNT);
 
-        if (p_token_addr == ZERO_ADDRESS) {
-            p_token = ptoken::mint(user_addr);
+        if (p_token_id == 0) {
+            p_token_id = ptoken::mint(user_addr);
             if (single_position) {
-                let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+                let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
                 d_token_state.single_position = true;
             }
         } else {
-            check_ptoken_id_owner(p_token, signer::address_of(user));
+            check_p_token_id_owner(p_token_id, signer::address_of(user));
         };
-        check_btoken_initialized(&gateway_storage.b_token_states, b_token);
+        check_b_token_initialized(&gateway_storage.b_token_states, b_token);
 
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(object::object_address(&p_token));
+        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
         let data = get_data_and_check_b_token_consistency(
             gateway_state,
             gateway_storage.b_token_states.borrow(object::object_address(&b_token)),
             d_token_state,
             user_addr,
-            p_token,
+            p_token_id,
             b_token
         );
 
         let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
-        deposit<PToken>(&mut data, b_token_asset, gateway_param);
+        deposit(&mut data, b_token_asset, gateway_param);
 
         data.save_data(gateway_state, d_token_state);
         let request_id = increment_request_id(gateway_state, d_token_state);
 
         event::emit(FinishAddMargin {
             request_id,
-            p_token_id: p_token_addr,
+            p_token_id,
             b_token: object::object_address(&b_token),
             b_amount
         });
 
-        p_token
+        p_token_id
     }
 
-    fun get_data<T: key>(
+    fun get_data(
         gateway_state: &GatewayState,
         b_token_state: &BTokenState,
         d_token_state: &DTokenState,
         account: address,
-        d_token: Object<T>,
+        d_token_id: u256,
         b_token: Object<Metadata>
-    ): Data<T> {
+    ): Data {
         let cumulative_pnl_on_gateway = gateway_state.cumulative_pnl_on_gateway;
 
-        Data<T> {
+        Data {
             account,
-            d_token,
+            d_token_id,
             b_token,
             cumulative_pnl_on_gateway,
             vault: b_token_state.vault,
@@ -1167,155 +1281,26 @@ module deri::gateway {
         }
     }
 
-    fun get_data_and_check_b_token_consistency<T: key>(
+    fun get_data_and_check_b_token_consistency(
         gateway_state: &GatewayState,
         b_token_state: &BTokenState,
         d_token_state: &DTokenState,
         account: address,
-        d_token: Object<T>,
+        d_token_id: u256,
         b_token: Object<Metadata>
-    ): Data<T> {
-        let data = get_data(gateway_state, b_token_state, d_token_state, account, d_token, b_token);
+    ): Data {
+        let data = get_data(gateway_state, b_token_state, d_token_state, account, d_token_id, b_token);
         check_b_token_consistency(
             d_token_state,
             b_token_state,
-            d_token,
+            d_token_id,
             b_token
         );
         data
     }
 
-    /// b_price * b_amount / UONE = b0_amount, b0_amount in decimals_b0
-    fun get_b_price(b_token: Object<Metadata>, gateway_param: &GatewayParam): u256 {
-        if (b_token == gateway_param.token_b0) { UONE }
-        else {
-            let _b_token_decimals = fungible_asset::decimals(b_token);
-            // TODO: get price from oracle
-
-            UONE
-        }
-    }
-
-    fun get_ex_params<T: key>(
-        self: &mut Data<T>,
-        b_token_state: &BTokenState,
-        gateway_param: &GatewayParam
-    ) {
-        self.collateral_factor = b_token_state.collateral_factor;
-        self.b_price = get_b_price(self.b_token, gateway_param);
-    }
-
-    /// Calculate the liquidity associated with current dTokenId
-    fun get_d_token_liquidity<T: key>(self: &Data<T>): u256 {
-        let b0_amount_in_vault =
-            vault::get_balance(object::address_to_object<Vault>(self.vault), self.d_token)
-                * self.b_price / UONE + self.collateral_factor / UONE;
-        let b0_shortage = if (!i256::is_neg(self.b0_amount)) { 0 }
-        else {
-            i256::abs_u256(self.b0_amount)
-        };
-
-        if (b0_amount_in_vault >= b0_shortage) {
-            b0_amount_in_vault + b0_shortage
-        } else { 0 }
-    }
-
-    /// Calculate the liquidity associated with current dTokenId if `bAmount` in bToken is removed
-    fun get_d_token_liquidity_with_remove<T: key>(
-        self: &Data<T>, gateway_param: &GatewayParam, b_amount: u256
-    ): u256 {
-        let liquidity = 0;
-        // make sure b_amount * b_price won't overflow
-        if (b_amount < MAX_AS_U256 / self.b_price) {
-            let b_amount_in_vault =
-                vault::get_balance(object::address_to_object<Vault>(self.vault), self.d_token);
-            if (b_amount >= b_amount_in_vault) {
-                if (i256::is_greater_than_zero(self.b0_amount)) {
-                    let b0_shortage = (b_amount - b_amount_in_vault) * self.b_price / UONE;
-                    let b0_amount = i256::as_u256(self.b0_amount);
-                    if (b0_amount > b0_shortage) {
-                        liquidity = b0_amount - b0_shortage;
-                    }
-                }
-            } else {
-                // discounted
-                let b0_excessive =
-                    (b_amount_in_vault - b_amount) * self.b_price / UONE * self.collateral_factor
-                        / UONE;
-                if (!i256::is_neg(self.b0_amount)) {
-                    liquidity = b0_excessive + i256::as_u256(self.b0_amount);
-                } else {
-                    let b0_shortage = i256::abs_u256(self.b0_amount);
-                    if (b0_excessive > b0_shortage) {
-                        liquidity = b0_excessive - b0_shortage;
-                    }
-                }
-            };
-
-            if (liquidity > 0) {
-                let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
-                liquidity = safe_math256::rescale(liquidity, decimals_b0, SCALE_DECIMALS);
-            }
-        };
-
-        liquidity
-    }
-
-    /// Calculate the liquidity (in 8 decimals) associated with current dTokenId if `bAmount` in bToken is removed
-    fun get_d_token_liquidity_with_remove_b0<T: key>(
-        self: &Data<T>, gateway_param: &GatewayParam, b0_amount_to_remove: u256
-    ): u256 {
-        let b_amount_in_vault =
-            vault::get_balance(object::address_to_object<Vault>(self.vault), self.d_token);
-        // discounted
-        let b0_value_of_b_amount_in_vault =
-            b_amount_in_vault * self.b_price / UONE * self.collateral_factor / UONE;
-        let b0_total =
-            if (!i256::is_neg(self.b0_amount)) {
-                b0_value_of_b_amount_in_vault + i256::as_u256(self.b0_amount)
-            } else {
-                b0_value_of_b_amount_in_vault - i256::abs_u256(self.b0_amount)
-            };
-
-        if (b0_total > b0_amount_to_remove) {
-            let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
-            safe_math256::rescale(b0_total - b0_amount_to_remove, decimals_b0, SCALE_DECIMALS)
-        } else { 0 }
-    }
-
-    fun check_ltoken_id_owner(l_token: Object<LToken>, user_address: address) {
-        assert!(object::owner(l_token) == user_address, EINVALID_LTOKEN_ID);
-    }
-
-    fun check_ptoken_id_owner(p_token: Object<PToken>, user_address: address) {
-        assert!(object::owner(p_token) == user_address, EINVALID_PTOKEN_ID);
-    }
-
-    fun check_btoken_initialized(
-        b_token_states: &SmartTable<address, BTokenState>, b_token: Object<Metadata>
-    ) {
-        let b_token_address = object::object_address(&b_token);
-        assert!(b_token_states.contains(b_token_address), EINVALID_BTOKEN);
-    }
-
-    fun check_b_token_consistency<T: key>(
-        d_token_state: &DTokenState,
-        b_token_state: &BTokenState,
-        d_token: Object<T>,
-        b_token: Object<Metadata>
-    ) {
-        let pre_b_token = d_token_state.b_token;
-        let pre_b_token_addr = object::object_address(&pre_b_token);
-        if (pre_b_token_addr != ZERO_ADDRESS && pre_b_token != b_token) {
-            let vault_address = b_token_state.vault;
-
-            let st_amount = vault::st_amounts(object::address_to_object(vault_address), d_token);
-            assert!(st_amount == 0, EINVALID_BTOKEN);
-        }
-    }
-
-    fun save_data<T: key>(
-        self: &Data<T>,
+    fun save_data(
+        self: &Data,
         gateway_state: &mut GatewayState,
         d_token_state: &mut DTokenState
     ) {
@@ -1348,6 +1333,41 @@ module deri::gateway {
         d_token_state.request_id = user_request_id;
 
         (gateway_request_id << 32) + user_request_id
+    }
+
+    fun check_b_token_initialized(
+        b_token_states: &SmartTable<address, BTokenState>, b_token: Object<Metadata>
+    ) {
+        let b_token_address = object::object_address(&b_token);
+        assert!(b_token_states.contains(b_token_address), EINVALID_BTOKEN);
+    }
+
+    fun check_b_token_consistency(
+        d_token_state: &DTokenState,
+        b_token_state: &BTokenState,
+        d_token_id: u256,
+        b_token: Object<Metadata>
+    ) {
+        let pre_b_token = d_token_state.b_token;
+        let pre_b_token_addr = object::object_address(&pre_b_token);
+        if (pre_b_token_addr != ZERO_ADDRESS && pre_b_token != b_token) {
+            let vault_address = b_token_state.vault;
+
+            let st_amount = vault::st_amounts(object::address_to_object(vault_address), d_token_id);
+            assert!(st_amount == 0, EINVALID_BTOKEN);
+        }
+    }
+
+    fun check_l_token_id_owner(l_token_id: u256, user_address: address) {
+        let l_token_addr = ltoken::get_token_address(l_token_id);
+        let l_token = object::address_to_object<LToken>(l_token_addr);
+        assert!(object::owner(l_token) == user_address, EINVALID_LTOKEN_ID);
+    }
+
+    fun check_p_token_id_owner(p_token_id: u256, user_address: address) {
+        let p_token_addr = ltoken::get_token_address(p_token_id);
+        let p_token = object::address_to_object<PToken>(p_token_addr);
+        assert!(object::owner(p_token) == user_address, EINVALID_PTOKEN_ID);
     }
 
     fun receive_execution_fee(
@@ -1394,30 +1414,128 @@ module deri::gateway {
         }
     }
 
-    fun deposit<T: key>(
-        data: &mut Data<T>, b_token_asset: FungibleAsset, gateway_param: &GatewayParam
+    /// b_price * b_amount / UONE = b0_amount, b0_amount in decimals_b0
+    fun get_b_price(b_token: Object<Metadata>, gateway_param: &GatewayParam): u256 {
+        if (b_token == gateway_param.token_b0) { UONE }
+        else {
+            let _b_token_decimals = fungible_asset::decimals(b_token);
+            // TODO: get price from oracle
+
+            UONE
+        }
+    }
+
+    fun get_ex_params(
+        self: &mut Data,
+        b_token_state: &BTokenState,
+        gateway_param: &GatewayParam
+    ) {
+        self.collateral_factor = b_token_state.collateral_factor;
+        self.b_price = get_b_price(self.b_token, gateway_param);
+    }
+
+    /// Calculate the liquidity associated with current dTokenId
+    fun get_d_token_liquidity(self: &Data): u256 {
+        let b0_amount_in_vault =
+            vault::get_balance(object::address_to_object<Vault>(self.vault), self.d_token_id)
+                * self.b_price / UONE + self.collateral_factor / UONE;
+        let b0_shortage = if (!i256::is_neg(self.b0_amount)) { 0 }
+        else {
+            i256::abs_u256(self.b0_amount)
+        };
+
+        if (b0_amount_in_vault >= b0_shortage) {
+            b0_amount_in_vault + b0_shortage
+        } else { 0 }
+    }
+
+    /// Calculate the liquidity associated with current dTokenId if `bAmount` in bToken is removed
+    fun get_d_token_liquidity_with_remove(
+        self: &Data, gateway_param: &GatewayParam, b_amount: u256
+    ): u256 {
+        let liquidity = 0;
+        // make sure b_amount * b_price won't overflow
+        if (b_amount < MAX_AS_U256 / self.b_price) {
+            let b_amount_in_vault =
+                vault::get_balance(object::address_to_object<Vault>(self.vault), self.d_token_id);
+            if (b_amount >= b_amount_in_vault) {
+                if (i256::is_greater_than_zero(self.b0_amount)) {
+                    let b0_shortage = (b_amount - b_amount_in_vault) * self.b_price / UONE;
+                    let b0_amount = i256::as_u256(self.b0_amount);
+                    if (b0_amount > b0_shortage) {
+                        liquidity = b0_amount - b0_shortage;
+                    }
+                }
+            } else {
+                // discounted
+                let b0_excessive =
+                    (b_amount_in_vault - b_amount) * self.b_price / UONE * self.collateral_factor
+                        / UONE;
+                if (!i256::is_neg(self.b0_amount)) {
+                    liquidity = b0_excessive + i256::as_u256(self.b0_amount);
+                } else {
+                    let b0_shortage = i256::abs_u256(self.b0_amount);
+                    if (b0_excessive > b0_shortage) {
+                        liquidity = b0_excessive - b0_shortage;
+                    }
+                }
+            };
+
+            if (liquidity > 0) {
+                let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
+                liquidity = safe_math256::rescale(liquidity, decimals_b0, SCALE_DECIMALS);
+            }
+        };
+
+        liquidity
+    }
+
+    /// Calculate the liquidity (in 8 decimals) associated with current dTokenId if `bAmount` in bToken is removed
+    fun get_d_token_liquidity_with_remove_b0(
+        self: &Data, gateway_param: &GatewayParam, b0_amount_to_remove: u256
+    ): u256 {
+        let b_amount_in_vault =
+            vault::get_balance(object::address_to_object<Vault>(self.vault), self.d_token_id);
+        // discounted
+        let b0_value_of_b_amount_in_vault =
+            b_amount_in_vault * self.b_price / UONE * self.collateral_factor / UONE;
+        let b0_total =
+            if (!i256::is_neg(self.b0_amount)) {
+                b0_value_of_b_amount_in_vault + i256::as_u256(self.b0_amount)
+            } else {
+                b0_value_of_b_amount_in_vault - i256::abs_u256(self.b0_amount)
+            };
+
+        if (b0_total > b0_amount_to_remove) {
+            let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
+            safe_math256::rescale(b0_total - b0_amount_to_remove, decimals_b0, SCALE_DECIMALS)
+        } else { 0 }
+    }
+
+    fun deposit(
+        data: &mut Data, b_token_asset: FungibleAsset, gateway_param: &GatewayParam
     ) {
         let b_amount = (fungible_asset::amount(&b_token_asset) as u256);
         if (data.b_token == gateway_param.token_b0) {
             let reserved = b_amount * gateway_param.b0_reserve_ratio / UONE;
-            vault::deposit<T>(
+            vault::deposit(
                 object::address_to_object(gateway_param.vault0),
-                object::address_to_object(ZERO_ADDRESS),
+                0,
                 fungible_asset::extract(&mut b_token_asset, (reserved as u64))
             );
             data.b0_amount = i256::add(data.b0_amount, i256::from(reserved));
         };
 
-        vault::deposit<T>(
+        vault::deposit(
             object::address_to_object(data.vault),
-            data.d_token,
+            data.d_token_id,
             b_token_asset
         );
     }
 
     /// Transfer a specified amount of bToken, handling various cases
-    fun transfer_out<T: key>(
-        data: &mut Data<T>,
+    fun transfer_out(
+        data: &mut Data,
         gateway_param: &GatewayParam,
         b_amount_out: u256,
         // A flag indicating whether the transfer is for a trader (true) or not (false).
@@ -1446,7 +1564,7 @@ module deri::gateway {
         let vault_obj = object::address_to_object<Vault>(data.vault);
         let b_fungible_asset = vault::redeem(
             vault_obj,
-            data.d_token,
+            data.d_token_id,
             b_amount
         );
         let b_amount = (fungible_asset::amount(&b_fungible_asset) as u256);
@@ -1530,9 +1648,9 @@ module deri::gateway {
                 let b0_out = 0;
                 if (amount > b0_amount_in) {
                     // Redeem B0 tokens from vault0
-                    let b0_redeemed_fungible_asset = vault::redeem<T>(
+                    let b0_redeemed_fungible_asset = vault::redeem(
                         object::address_to_object<Vault>(gateway_param.vault0),
-                        object::address_to_object(ZERO_ADDRESS),
+                        0,
                         amount - b0_amount_in
                     );
                     let b0_redeemed = (fungible_asset::amount(&b0_redeemed_fungible_asset) as u256);
@@ -1570,9 +1688,9 @@ module deri::gateway {
                 (b0_amount_in as u64)
             );
 
-            vault::deposit<T>(
+            vault::deposit(
                 object::address_to_object(gateway_param.vault0),
-                object::address_to_object(ZERO_ADDRESS),
+                0,
                 b0_fungible_asset
             );
         };
@@ -1709,7 +1827,7 @@ module deri::gateway {
         }
     }
 
-    fun process_reward<T: key>(
+    fun process_reward(
         gateway_param: &GatewayParam,
         token_b0: Object<Metadata>,
         vault0: address,
@@ -1725,9 +1843,9 @@ module deri::gateway {
         if (u_reward <= b0_amount_in) {
             b0_amount_in -= u_reward;
         } else {
-            let b0_redeemed_asset = vault::redeem<T>(
+            let b0_redeemed_asset = vault::redeem(
                 object::address_to_object<Vault>(vault0),
-                object::address_to_object(ZERO_ADDRESS),
+                0,
                 u_reward - b0_amount_in
             );
             let b0_redeemed = (fungible_asset::amount(&b0_redeemed_asset) as u256);

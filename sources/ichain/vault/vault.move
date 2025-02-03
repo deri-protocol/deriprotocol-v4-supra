@@ -22,7 +22,7 @@ module deri::vault {
         // dtoken_id => st_amount
         // The 'st_amounts' represents the stake or equity held by a 'dtoken_id' within a vault
         // The portion 'st_amount/ st_total_amount' denotes the share of equity that a specific 'dtoken_id' has within this vault
-        st_amounts: SmartTable<address, u256>,
+        st_amounts: SmartTable<u256, u256>,
         st_total_amount: u256,
         transfer_total_asset_amount: u256,
         // Asset token, e.g. DERI
@@ -37,10 +37,10 @@ module deri::vault {
     }
 
     #[view]
-    public fun get_balance<T: key>(vault: Object<Vault>, dtoken: Object<T>): u256 acquires Vault {
+    public fun get_balance(vault: Object<Vault>, d_token_id: u256): u256 acquires Vault {
         let vault_address = vault_address(&vault);
         let vault = vault_data(vault);
-        let st_amount = *vault.st_amounts.borrow(object::object_address(&dtoken));
+        let st_amount = *vault.st_amounts.borrow(d_token_id);
 
         if (st_amount != 0 && vault.st_total_amount != 0) {
             (primary_fungible_store::balance(vault_address, vault.asset) as u256) * st_amount / vault.st_total_amount
@@ -48,9 +48,9 @@ module deri::vault {
     }
 
     #[view]
-    public fun st_amounts<T: key>(vault: Object<Vault>, dtoken: Object<T>): u256 acquires Vault {
+    public fun st_amounts(vault: Object<Vault>, d_token_id: u256): u256 acquires Vault {
         let vault = vault_data(vault);
-        *vault.st_amounts.borrow(object::object_address(&dtoken))
+        *vault.st_amounts.borrow(d_token_id)
     }
 
     #[view]
@@ -98,10 +98,9 @@ module deri::vault {
 
     /// Deposit assets into the vault associated with a specific 'dtoken'.
     /// Only gateway module can call friend function.
-    friend fun deposit<T: key>(
-        vault: Object<Vault>, dtoken: Object<T>, asset: FungibleAsset
+    friend fun deposit(
+        vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset
     ): u256 acquires Vault {
-        let dtoken_address = object::object_address(&dtoken);
         let minted_ts = 0;
         let asset_decimals = fungible_asset::decimals(fungible_asset::metadata_from_asset(&asset));
         let amount = (fungible_asset::amount(&asset) as u256);
@@ -119,9 +118,9 @@ module deri::vault {
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amounts = &mut vault.st_amounts;
-        let st_amount = *st_amounts.borrow(dtoken_address);
+        let st_amount = *st_amounts.borrow(d_token_id);
         st_amount += minted_ts;
-        st_amounts.upsert(dtoken_address, st_amount);
+        st_amounts.upsert(d_token_id, st_amount);
         vault.st_total_amount += minted_ts;
 
         minted_ts
@@ -129,14 +128,13 @@ module deri::vault {
 
     /// Redeem staked tokens and receive assets from the vault associated with a specific 'dToken'
     /// Only gateway module can call friend function.
-    friend fun redeem<T: key>(
-        vault: Object<Vault>, dtoken: Object<T>, amount: u256
+    friend fun redeem(
+        vault: Object<Vault>, d_token_id: u256, amount: u256
     ): FungibleAsset acquires Vault {
-        let dtoken_address = object::object_address(&dtoken);
         let redeemed_amount = 0;
         let vault_address = vault_address(&vault);
         let vault = &mut Vault[object::object_address(&vault)];
-        let st_amount = *vault.st_amounts.borrow(dtoken_address);
+        let st_amount = *vault.st_amounts.borrow(d_token_id);
 
         if (st_amount == 0) {
             return fungible_asset::zero(vault.asset)
@@ -162,7 +160,7 @@ module deri::vault {
         };
 
         // Update the staked amount for 'dTokenId' and the total staked amount
-        let st_amount = *vault.st_amounts.borrow_mut(dtoken_address);
+        let st_amount = *vault.st_amounts.borrow_mut(d_token_id);
         st_amount -= burned_st;
 
         primary_fungible_store::withdraw(
