@@ -23,7 +23,7 @@ module deri::ptoken {
 
     /// TODO: update later
     const URI: vector<u8> = b"";
-    const UNIQUE_IDENTIFIER: u8 = 1;
+    const UNIQUE_IDENTIFIER: u8 = 2;
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct CollectionConfig has key {

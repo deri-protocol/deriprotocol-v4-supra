@@ -1,6 +1,7 @@
 module deri::i256 {
     use std::string::{Self, String};
     use aptos_std::math64;
+    use aptos_std::string_utils;
 
     const OVERFLOW: u64 = 0;
 
@@ -231,16 +232,7 @@ module deri::i256 {
     }
 
     public fun u256_to_string(value: u256): String {
-        if (value == 0) {
-            return string::utf8(b"0")
-        };
-        let buffer = vector[];
-        while (value != 0) {
-            buffer.push_back(((48 + value % 10) as u8));
-            value /= 10;
-        };
-        buffer.reverse();
-        string::utf8(buffer)
+        string_utils::to_string(&value)
     }
 
     fun u256_neg(v: u256): u256 {

@@ -6,7 +6,9 @@ authors = []
 [addresses]
 deri = "_"
 deployer = "_"
-admin = "_"
+d_chain_event_signer = "_"
+protocol_fee_manager = "_"
+liq_claim = "_"
 
 [dev-addresses]
 

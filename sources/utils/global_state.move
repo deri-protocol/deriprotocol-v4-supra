@@ -3,10 +3,10 @@ module deri::global_state {
     use std::signer;
 
     friend deri::coin_wrapper;
+    friend deri::gateway;
     friend deri::iou;
     friend deri::ltoken;
     friend deri::ptoken;
-    friend deri::gateway;
     friend deri::vault;
 
     const GLOBAL_STATE_NAME: vector<u8> = b"deri::global_state";
@@ -28,7 +28,7 @@ module deri::global_state {
             global_state_signer,
             GlobalState {
                 extend_ref: object::generate_extend_ref(global_state),
-                admin: signer::address_of(deployer),
+                admin: @deployer,
                 pending_admin: @0x0
             }
         );

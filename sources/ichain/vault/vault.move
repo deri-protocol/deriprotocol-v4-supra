@@ -1,13 +1,12 @@
 module deri::vault {
-    use std::bcs;
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, Metadata, FungibleAsset};
     use aptos_framework::object::{Self, Object, ExtendRef};
     use aptos_framework::primary_fungible_store;
     use aptos_std::smart_table::{Self, SmartTable};
     use deri::global_state;
-    use deri::coin_wrapper;
     use deri::safe_math256;
+    use std::bcs;
 
     friend deri::gateway;
 
@@ -74,10 +73,8 @@ module deri::vault {
     /// Create a new vault with the given asset.
     /// Only gateway module can call friend function.
     friend fun create_vault(asset: Object<Metadata>): Object<Vault> {
-        let asset_name = coin_wrapper::get_coin_type(asset);
-        let vault = &object::create_named_object(&global_state::config_signer(), bcs::to_bytes(&asset_name));
+        let vault = &object::create_named_object(&global_state::config_signer(), bcs::to_bytes(&asset));
         let vault_signer = object::generate_signer(vault);
-        let vault_object = object::object_from_constructor_ref(vault);
         move_to(
             &vault_signer,
             Vault {
@@ -88,6 +85,7 @@ module deri::vault {
                 extend_ref: object::generate_extend_ref(vault)
             }
         );
+        let vault_object = object::object_from_constructor_ref(vault);
 
         event::emit(
             VaultCreated { vault: vault_object, asset }
