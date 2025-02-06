@@ -166,7 +166,7 @@ module deri::coin_wrapper {
     }
 
     #[test_only]
-    public fun init_for_test(_deployer: &signer) {
-        init_module(_deployer);
+    public fun init_for_test(deployer: &signer) {
+        init_module(deployer);
     }
 }

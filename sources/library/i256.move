@@ -26,6 +26,10 @@ module deri::i256 {
         I256 { bits: v }
     }
 
+    public fun from_uncheck(v: u256): I256 {
+        I256 { bits: v }
+    }
+
     public fun neg_from(v: u256): I256 {
         assert!(v <= MIN_AS_U256, OVERFLOW);
         if (v == 0) {
@@ -235,6 +239,25 @@ module deri::i256 {
         string_utils::to_string(&value)
     }
 
+    public fun string_to_u256(s: String): u256 {
+        let num: u256 = 0;
+        let len = (s.length() as u256);
+        let i = 0;
+
+        while (i < len) {
+            let bytes = *s.bytes();
+            let c = bytes[(i as u64)];
+            let digit = char_to_digit(c);
+            num = num * 10 + digit; // Shift left by one decimal place and add the new digit
+            i += 1;
+        };
+        num
+    }
+
+    public fun lower_128_bits(v: u256): u256 {
+        (v & ((1 << 128) - 1))
+    }
+
     fun u256_neg(v: u256): u256 {
         v
             ^ 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
@@ -242,5 +265,14 @@ module deri::i256 {
 
     fun u8_neg(v: u8): u8 {
         v ^ 0xff
+    }
+
+    fun char_to_digit(c: u8): u256 {
+        // Check if the character is between '0' and '9'
+        if (c >= 48 && c <= 57) {
+            (c as u256) - 48
+        } else {
+            abort 1 // Aborts if the character is not a valid decimal digit
+        }
     }
 }

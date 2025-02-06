@@ -10,7 +10,6 @@ module deri::ptoken {
     use aptos_framework::object::{Self, ExtendRef, Object};
     use aptos_token_objects::collection::{Self, MutatorRef};
     use aptos_token_objects::token::{Self, BurnRef};
-    use deri::global_state;
     use std::bcs;
     use std::option;
     use std::signer;
@@ -55,7 +54,7 @@ module deri::ptoken {
     fun init_module(deployer: &signer) {
         // Create an unlimited NFT collection with no royalty
         let creator =
-            &object::create_named_object(&global_state::config_signer(), PTOKEN_COLLECTION_NAME);
+            &object::create_named_object(deployer, PTOKEN_COLLECTION_NAME);
         let collection =
             &collection::create_unlimited_collection(
                 &object::generate_signer(creator),
@@ -144,5 +143,25 @@ module deri::ptoken {
 
     inline fun creator_signer(): &signer acquires CollectionConfig {
         &object::generate_signer_for_extending(&CollectionConfig[@deri].creator)
+    }
+
+    #[test_only]
+    public fun init_for_test(deployer: &signer) {
+        init_module(deployer);
+    }
+
+    #[test_only]
+    public fun extract_ptoken_minted_event(event: &PTokenMinted): Object<PToken> {
+        event.nft
+    }
+
+    #[test_only]
+    public fun test_mint(to: address): u256 acquires CollectionConfig {
+        mint(to)
+    }
+
+    #[test_only]
+    public fun test_burn(token_id: u256) acquires PToken, CollectionConfig {
+        burn(token_id);
     }
 }

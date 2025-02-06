@@ -145,4 +145,9 @@ module deri::ltoken {
     inline fun creator_signer(): &signer acquires CollectionConfig {
         &object::generate_signer_for_extending(&CollectionConfig[@deri].creator)
     }
+
+    #[test_only]
+    public fun init_for_test(deployer: &signer) {
+        init_module(deployer);
+    }
 }

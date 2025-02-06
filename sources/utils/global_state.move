@@ -23,12 +23,11 @@ module deri::global_state {
 
     fun init_module(deployer: &signer) {
         let global_state = &object::create_named_object(deployer, GLOBAL_STATE_NAME);
-        let global_state_signer = &object::generate_signer(global_state);
         move_to(
-            global_state_signer,
+            deployer,
             GlobalState {
                 extend_ref: object::generate_extend_ref(global_state),
-                admin: @deployer,
+                admin: @admin,
                 pending_admin: @0x0
             }
         );
@@ -40,7 +39,7 @@ module deri::global_state {
     }
 
     friend fun config_signer(): signer acquires GlobalState {
-        object::generate_signer_for_extending(&GlobalState[config_address()].extend_ref)
+        object::generate_signer_for_extending(&GlobalState[@deri].extend_ref)
     }
 
     public entry fun transfer_admin(admin: &signer, new_admin: address) acquires GlobalState {
