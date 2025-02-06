@@ -4,11 +4,11 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-deri = "_"
-deployer = "_"
-d_chain_event_signer = "_"
-protocol_fee_manager = "_"
-liq_claim = "_"
+deri = "0xcafe"
+admin = "0xcafe1"
+protocol_fee_manager = "0xcafe1"
+liq_claim = "0xcafe1"
+b0_token = "0xcafe2"
 
 [dev-addresses]
 

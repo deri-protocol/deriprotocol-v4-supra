@@ -36,8 +36,13 @@ module deri::vault {
     }
 
     #[view]
+    public fun vault_address(asset: Object<Metadata>): address {
+        object::create_object_address(&global_state::config_address(), bcs::to_bytes(&asset))
+    }
+
+    #[view]
     public fun get_balance(vault: Object<Vault>, d_token_id: u256): u256 acquires Vault {
-        let vault_address = vault_address(&vault);
+        let vault_address = object::object_address(&vault);
         let vault = vault_data(vault);
         let st_amount = *vault.st_amounts.borrow(d_token_id);
 
@@ -99,10 +104,10 @@ module deri::vault {
     friend fun deposit(
         vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset
     ): u256 acquires Vault {
-        let minted_ts = 0;
+        let minted_ts;
         let asset_decimals = fungible_asset::decimals(fungible_asset::metadata_from_asset(&asset));
         let amount = (fungible_asset::amount(&asset) as u256);
-        let vault_address = vault_address(&vault);
+        let vault_address = object::object_address(&vault);
         primary_fungible_store::deposit(vault_address, asset);
 
         let vault = &mut Vault[object::object_address(&vault)];
@@ -116,7 +121,7 @@ module deri::vault {
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amounts = &mut vault.st_amounts;
-        let st_amount = *st_amounts.borrow(d_token_id);
+        let st_amount = *st_amounts.borrow_with_default(d_token_id, &0);
         st_amount += minted_ts;
         st_amounts.upsert(d_token_id, st_amount);
         vault.st_total_amount += minted_ts;
@@ -129,8 +134,8 @@ module deri::vault {
     friend fun redeem(
         vault: Object<Vault>, d_token_id: u256, amount: u256
     ): FungibleAsset acquires Vault {
-        let redeemed_amount = 0;
-        let vault_address = vault_address(&vault);
+        let redeemed_amount;
+        let vault_address = object::object_address(&vault);
         let vault = &mut Vault[object::object_address(&vault)];
         let st_amount = *vault.st_amounts.borrow(d_token_id);
 
@@ -160,6 +165,8 @@ module deri::vault {
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amount = *vault.st_amounts.borrow_mut(d_token_id);
         st_amount -= burned_st;
+        vault.st_amounts.upsert(d_token_id, st_amount);
+        vault.st_total_amount -= burned_st;
 
         primary_fungible_store::withdraw(
             &object::generate_signer_for_extending(&vault.extend_ref),
@@ -172,7 +179,22 @@ module deri::vault {
         &Vault[object::object_address(&vault)]
     }
 
-    inline fun vault_address<T: key>(vault: &Object<T>): address {
-        object::object_address(vault)
+    #[test_only]
+    public fun create_vault_for_test(asset: Object<Metadata>): Object<Vault> {
+        create_vault(asset)
+    }
+
+    #[test_only]
+    public fun deposit_for_test(
+        vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset
+    ): u256 acquires Vault {
+        deposit(vault, d_token_id, asset)
+    }
+
+    #[test_only]
+    public fun redeem_for_test(
+        vault: Object<Vault>, d_token_id: u256, amount: u256
+    ): FungibleAsset acquires Vault {
+        redeem(vault, d_token_id, amount)
     }
 }

@@ -9,7 +9,6 @@ module deri::iou {
     use aptos_framework::primary_fungible_store;
     use std::option;
     use std::string::utf8;
-    use deri::global_state;
 
     friend deri::gateway;
 
@@ -27,9 +26,9 @@ module deri::iou {
         burn_ref: BurnRef
     }
 
-    fun init_module(_deployer: &signer) {
+    fun init_module(deployer: &signer) {
         let constructor_ref =
-            &object::create_named_object(&global_state::config_signer(), ASSET_SYMBOL);
+            &object::create_named_object(deployer, ASSET_SYMBOL);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             constructor_ref,
             option::none(),
@@ -43,9 +42,8 @@ module deri::iou {
         let mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
-        let metadata_object_signer = object::generate_signer(constructor_ref);
         move_to(
-            &metadata_object_signer,
+            deployer,
             ManagedFungibleAsset { mint_ref, transfer_ref, burn_ref }
         );
     }
@@ -58,7 +56,7 @@ module deri::iou {
 
     friend fun mint(to: address, amount: u64) acquires ManagedFungibleAsset {
         let asset = get_metadata();
-        let managed_fungible_asset = &ManagedFungibleAsset[object::object_address(&asset)];
+        let managed_fungible_asset = &ManagedFungibleAsset[@deri];
         let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
         let fa = fungible_asset::mint(&managed_fungible_asset.mint_ref, amount);
         fungible_asset::deposit_with_ref(&managed_fungible_asset.transfer_ref, to_wallet, fa);
@@ -69,5 +67,20 @@ module deri::iou {
         let burn_ref = &ManagedFungibleAsset[object::object_address(&asset)].burn_ref;
         let from_wallet = primary_fungible_store::primary_store(from, asset);
         fungible_asset::burn_from(burn_ref, from_wallet, amount);
+    }
+
+    #[test_only]
+    public fun init_for_test(deployer: &signer) {
+        init_module(deployer);
+    }
+
+    #[test_only]
+    public fun mint_for_test(to: address, amount: u64) acquires ManagedFungibleAsset {
+        mint(to, amount);
+    }
+
+    #[test_only]
+    public fun burn_for_test(from: address, amount: u64) acquires ManagedFungibleAsset {
+        burn(from, amount);
     }
 }
