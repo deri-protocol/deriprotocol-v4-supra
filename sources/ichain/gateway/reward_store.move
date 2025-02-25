@@ -4,10 +4,10 @@
 /// The reward is stored in a `SmartTable` and can only be transferred to the recipient
 /// upon verification of ownership.
 module deri::reward_store {
-    use aptos_framework::event;
-    use aptos_framework::fungible_asset::{Self, FungibleStore, Metadata};
-    use aptos_framework::object::{Self, ExtendRef, Object};
-    use aptos_framework::primary_fungible_store;
+    use supra_framework::event;
+    use supra_framework::fungible_asset::{Self, FungibleStore, Metadata};
+    use supra_framework::object::{Self, ExtendRef, Object};
+    use supra_framework::primary_fungible_store;
     use aptos_std::smart_table::{Self, SmartTable};
 
     friend deri::gateway;
@@ -17,7 +17,7 @@ module deri::reward_store {
     /// zero reward balance
     const EREWARD_ZERO: u64 = 0;
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct RewardStore has key {
         store: Object<FungibleStore>,
         extend_ref: ExtendRef,
@@ -55,10 +55,10 @@ module deri::reward_store {
     /// Allows a user to claim their reward.
     friend fun claim_reward(user_address: vector<u8>, recipient: address) acquires RewardStore {
         let reward_store = &mut RewardStore[@deri];
-        let reward = *reward_store.reward.borrow(user_address);
+        let reward = *smart_table::borrow(&reward_store.reward, user_address);
         assert!(reward > 0, EREWARD_ZERO);
 
-        reward_store.reward.remove(user_address);
+        smart_table::remove(&mut reward_store.reward, user_address);
 
         let store_signer = &object::generate_signer_for_extending(&reward_store.extend_ref);
         fungible_asset::transfer(
@@ -78,8 +78,9 @@ module deri::reward_store {
     /// Deposits a reward into the user's balance.
     friend fun deposit_reward(user_address: vector<u8>, reward_amount: u64) acquires RewardStore {
         let reward_store = &mut RewardStore[@deri];
-        let current_reward_amount = *reward_store.reward.borrow(user_address);
-        reward_store.reward.upsert(user_address, current_reward_amount + reward_amount);
+        let current_reward_amount = *smart_table::borrow(&reward_store.reward, user_address);
+
+        smart_table::upsert(&mut reward_store.reward, user_address, current_reward_amount + reward_amount);
 
         event::emit(DepositReward {
             user_address,

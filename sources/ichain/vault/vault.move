@@ -1,8 +1,8 @@
 module deri::vault {
-    use aptos_framework::event;
-    use aptos_framework::fungible_asset::{Self, Metadata, FungibleAsset};
-    use aptos_framework::object::{Self, Object, ExtendRef};
-    use aptos_framework::primary_fungible_store;
+    use supra_framework::event;
+    use supra_framework::fungible_asset::{Self, Metadata, FungibleAsset};
+    use supra_framework::object::{Self, Object, ExtendRef};
+    use supra_framework::primary_fungible_store;
     use aptos_std::smart_table::{Self, SmartTable};
     use deri::global_state;
     use deri::safe_math256;
@@ -16,7 +16,7 @@ module deri::vault {
     /// Tiny share of init deposit
     const ETINY_SHARE_OF_INIT_DEPOSIT: u64 = 1;
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct Vault has key {
         // dtoken_id => st_amount
         // The 'st_amounts' represents the stake or equity held by a 'dtoken_id' within a vault
@@ -44,7 +44,7 @@ module deri::vault {
     public fun get_balance(vault: Object<Vault>, d_token_id: u256): u256 acquires Vault {
         let vault_address = object::object_address(&vault);
         let vault = vault_data(vault);
-        let st_amount = *vault.st_amounts.borrow(d_token_id);
+        let st_amount = *smart_table::borrow(&vault.st_amounts, d_token_id);
 
         if (st_amount != 0 && vault.st_total_amount != 0) {
             (primary_fungible_store::balance(vault_address, vault.asset) as u256) * st_amount / vault.st_total_amount
@@ -54,7 +54,7 @@ module deri::vault {
     #[view]
     public fun st_amounts(vault: Object<Vault>, d_token_id: u256): u256 acquires Vault {
         let vault = vault_data(vault);
-        *vault.st_amounts.borrow(d_token_id)
+        *smart_table::borrow(&vault.st_amounts, d_token_id)
     }
 
     #[view]
@@ -121,9 +121,9 @@ module deri::vault {
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amounts = &mut vault.st_amounts;
-        let st_amount = *st_amounts.borrow_with_default(d_token_id, &0);
+        let st_amount = *smart_table::borrow_with_default(st_amounts, d_token_id, &0);
         st_amount += minted_ts;
-        st_amounts.upsert(d_token_id, st_amount);
+        smart_table::upsert(st_amounts, d_token_id, st_amount);
         vault.st_total_amount += minted_ts;
 
         minted_ts
@@ -137,7 +137,7 @@ module deri::vault {
         let redeemed_amount;
         let vault_address = object::object_address(&vault);
         let vault = &mut Vault[object::object_address(&vault)];
-        let st_amount = *vault.st_amounts.borrow(d_token_id);
+        let st_amount = *smart_table::borrow(&vault.st_amounts, d_token_id);
 
         if (st_amount == 0) {
             return fungible_asset::zero(vault.asset)
@@ -163,9 +163,9 @@ module deri::vault {
         };
 
         // Update the staked amount for 'dTokenId' and the total staked amount
-        let st_amount = *vault.st_amounts.borrow_mut(d_token_id);
+        let st_amount = *smart_table::borrow_mut(&mut vault.st_amounts, d_token_id);
         st_amount -= burned_st;
-        vault.st_amounts.upsert(d_token_id, st_amount);
+        smart_table::upsert(&mut vault.st_amounts, d_token_id, st_amount);
         vault.st_total_amount -= burned_st;
 
         primary_fungible_store::withdraw(

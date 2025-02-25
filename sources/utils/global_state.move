@@ -1,5 +1,5 @@
 module deri::global_state {
-    use aptos_framework::object::{Self, ExtendRef};
+    use supra_framework::object::{Self, ExtendRef};
     use std::signer;
 
     friend deri::coin_wrapper;
@@ -14,7 +14,7 @@ module deri::global_state {
     /// Caller is not authorized
     const ENOT_AUTHORIZED: u64 = 1;
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct GlobalState has key {
         extend_ref: ExtendRef,
         admin: address,

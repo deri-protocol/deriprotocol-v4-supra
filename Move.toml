@@ -8,12 +8,12 @@ deri = "0xcafe"
 admin = "0xcafe1"
 protocol_fee_manager = "0xcafe1"
 liq_claim = "0xcafe1"
-b0_token = "0xcafe2"
+b0_token = "0xdb0a9c771aad8de01c250de6b4230c16c7a0475f333c8da2e68040c9ca5e704e"
 
 [dev-addresses]
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-framework.git", subdir = "aptos-framework", rev = "mainnet" }
-AptosTokenObjects = { git = "https://github.com/aptos-labs/aptos-framework.git", subdir = "aptos-token-objects", rev = "mainnet" }
+SupraFramework = { git = "https://github.com/tuvuanh27/aptos-core.git", subdir = "aptos-move/framework/supra-framework", rev = "fix/vesting_without_staking.spec.move" }
+AptosTokenObjects = { git = "https://github.com/tuvuanh27/aptos-core.git", subdir = "aptos-move/framework/aptos-token-objects", rev = "fix/vesting_without_staking.spec.move" }
 
 [dev-dependencies]

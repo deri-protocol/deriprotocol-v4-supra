@@ -1,14 +1,14 @@
 module deri::gateway {
-    use aptos_framework::aptos_account;
-    use aptos_framework::aptos_coin::AptosCoin;
-    use aptos_framework::chain_id;
-    use aptos_framework::coin::Coin;
-    use aptos_framework::coin;
-    use aptos_framework::event;
-    use aptos_framework::fungible_asset::{Self, Metadata, FungibleAsset, FungibleStore};
-    use aptos_framework::object::{Self, Object, ExtendRef};
-    use aptos_framework::primary_fungible_store;
-    use aptos_framework::timestamp;
+    use supra_framework::supra_account;
+    use supra_framework::supra_coin::SupraCoin;
+    use supra_framework::chain_id;
+    use supra_framework::coin::Coin;
+    use supra_framework::coin;
+    use supra_framework::event;
+    use supra_framework::fungible_asset::{Self, Metadata, FungibleAsset, FungibleStore};
+    use supra_framework::object::{Self, Object, ExtendRef};
+    use supra_framework::primary_fungible_store;
+    use supra_framework::timestamp;
     use aptos_std::aptos_hash;
     use aptos_std::from_bcs;
     use aptos_std::math64;
@@ -24,8 +24,10 @@ module deri::gateway {
     use deri::safe_math256;
     use deri::vault::{Self, Vault};
     use std::error;
+    use std::option;
     use std::signer;
     use std::string::String;
+    use std::vector;
 
     /// TODO: update value for deployment
     const B0_RESERVE_RATIO: u256 = 200_000_000_000_000_000;
@@ -82,7 +84,7 @@ module deri::gateway {
     /// Not implemented
     const ENOT_IMPLEMENTED: u64 = 11;
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct GatewayStorage has key {
         gateway_state: GatewayState,
         // b_token address => state
@@ -93,7 +95,7 @@ module deri::gateway {
         execution_fees: ExecutionFee
     }
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct GatewayParam has key {
         // Vault for holding reserved B0, used for payments on regular bases
         vault0: address,
@@ -325,7 +327,7 @@ module deri::gateway {
 
     fun init_module(deployer: &signer) {
         // create wrap APT
-        coin_wrapper::create_fungible_asset<AptosCoin>();
+        coin_wrapper::create_fungible_asset<SupraCoin>();
 
         let token_b0 = object::address_to_object<Metadata>(@b0_token);
 
@@ -352,8 +354,8 @@ module deri::gateway {
         };
 
         let gateway_stores = smart_table::new();
-        gateway_stores.add(token_b0, create_gateway_store(token_b0));
-        gateway_stores.add(get_aptos_coin_wrapper(), create_gateway_store(get_aptos_coin_wrapper()));
+        smart_table::add(&mut gateway_stores, token_b0, create_gateway_store(token_b0));
+        smart_table::add(&mut gateway_stores, get_aptos_coin_wrapper(), create_gateway_store(get_aptos_coin_wrapper()));
 
         move_to(
             deployer,
@@ -444,7 +446,7 @@ module deri::gateway {
     #[view]
     public fun get_b_token_state(b_token: Object<Metadata>): (address, String, u256) acquires GatewayStorage {
         let gateway_storage = &GatewayStorage[@deri];
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&b_token));
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&b_token));
         (
             b_token_state.vault,
             b_token_state.oracle_id,
@@ -466,9 +468,9 @@ module deri::gateway {
         u256,
     ) acquires GatewayStorage {
         let gateway_storage = &GatewayStorage[@deri];
-        let d_token_state = gateway_storage.d_token_states.borrow(l_token_id);
+        let d_token_state = smart_table::borrow(&gateway_storage.d_token_states, l_token_id);
         let b_token_addr = object::object_address(&d_token_state.b_token);
-        let b_token_state = gateway_storage.b_token_states.borrow(b_token_addr);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, b_token_addr);
 
         (
             d_token_state.request_id,
@@ -496,9 +498,9 @@ module deri::gateway {
         u256
     ) acquires GatewayStorage {
         let gateway_storage = &GatewayStorage[@deri];
-        let d_token_state = gateway_storage.d_token_states.borrow(p_token_id);
+        let d_token_state = smart_table::borrow(&gateway_storage.d_token_states, p_token_id);
         let b_token_addr = object::object_address(&d_token_state.b_token);
-        let b_token_state = gateway_storage.b_token_states.borrow(b_token_addr);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, b_token_addr);
 
         (
             d_token_state.request_id,
@@ -516,7 +518,7 @@ module deri::gateway {
     public fun get_cumulative_time(l_token_id: u256): (u256, u256) acquires GatewayStorage {
         let gateway_storage = &GatewayStorage[@deri];
         let gateway_state = &gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow(l_token_id);
+        let d_token_state = smart_table::borrow(&gateway_storage.d_token_states, l_token_id);
 
         get_cumulative_time_internal(gateway_state, d_token_state)
     }
@@ -538,7 +540,7 @@ module deri::gateway {
         signature_bytes: vector<u8>,
         event_data: vector<u8>
     ): vector<u8> {
-        let signature = secp256k1::ecdsa_signature_from_bytes(signature_bytes.slice(0, SIGNATURE_RS_LENGTH));
+        let signature = secp256k1::ecdsa_signature_from_bytes(vector::slice(&signature_bytes, 0, SIGNATURE_RS_LENGTH));
 
         let ecdsa_recover = secp256k1::ecdsa_recover(
             eth_signed_message_hash(event_data),
@@ -546,14 +548,15 @@ module deri::gateway {
             &signature,
         );
 
-        let pubkey = aptos_hash::keccak256(secp256k1::ecdsa_raw_public_key_to_bytes(&ecdsa_recover.destroy_some()));
-        pubkey.slice(PUBKEY_HASH_START, PUBKEY_HASH_END)
+        let pubkey = aptos_hash::keccak256(secp256k1::ecdsa_raw_public_key_to_bytes(&option::destroy_some(ecdsa_recover)));
+        vector::slice(&pubkey, PUBKEY_HASH_START, PUBKEY_HASH_END)
     }
 
     // Ethereum signed message prefix
     public fun eth_signed_message_hash(event_data: vector<u8>): vector<u8> {
         let message = ETH_PREFIX;
-        message.append(aptos_hash::keccak256(event_data));
+        vector::append(&mut message, aptos_hash::keccak256(event_data));
+
         aptos_hash::keccak256(message)
     }
 
@@ -582,12 +585,14 @@ module deri::gateway {
         let vault = object::address_to_object<Vault>(vault_address);
 
         assert!(vault::asset(vault) == b_token, EINVALID_BTOKEN);
-        b_token_states.add(
-            b_token_address, BTokenState { vault: vault_address, oracle_id, collateral_factor }
+        smart_table::add(
+            b_token_states,
+            b_token_address,
+            BTokenState { vault: vault_address, oracle_id, collateral_factor }
         );
 
         // create store for b_token
-        gateway_param.gateway_stores.upsert(b_token, create_gateway_store(b_token));
+        smart_table::upsert(&mut gateway_param.gateway_stores, b_token, create_gateway_store(b_token));
 
         event::emit(
             AddBToken {
@@ -605,12 +610,12 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let b_token_states = &mut gateway_storage.b_token_states;
         let b_token_address = object::object_address(&b_token);
-        let b_token_state = b_token_states.borrow(b_token_address);
+        let b_token_state = smart_table::borrow(b_token_states, b_token_address);
 
         let vault = object::address_to_object<Vault>(b_token_state.vault);
         assert!(vault::st_total_amount(vault) == 0, ENOT_DELETE_BTOKEN);
 
-        b_token_states.remove(b_token_address);
+        smart_table::remove(b_token_states, b_token_address);
 
         event::emit(DelBToken { b_token: b_token_address });
     }
@@ -628,7 +633,7 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let b_token_states = &mut gateway_storage.b_token_states;
         let b_token_address = object::object_address(&b_token);
-        let b_token_state = b_token_states.borrow_mut(b_token_address);
+        let b_token_state = smart_table::borrow_mut(b_token_states, b_token_address);
 
         let vault = object::address_to_object<Vault>(vault_address);
         assert!(vault::asset(vault) == b_token, EINVALID_BTOKEN);
@@ -691,7 +696,7 @@ module deri::gateway {
             gateway_store.store
         ) as u256) - gateway_state.total_i_chain_execution_fee;
         let apt = withdraw_aptos_coin_from_store(gateway_store, execution_fee);
-        aptos_account::deposit_coins(to, apt);
+        supra_account::deposit_coins(to, apt);
     }
 
     /// Claim unused iChain execution fee for dTokenId
@@ -701,7 +706,7 @@ module deri::gateway {
     ) acquires GatewayStorage, GatewayParam {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(d_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, d_token_id);
 
         let owner_addr = if (is_lp) {
             ltoken::owner(d_token_id)
@@ -718,7 +723,7 @@ module deri::gateway {
             let gateway_param = &GatewayParam[@deri];
             let gateway_store = get_gateway_store(gateway_param, get_aptos_coin_wrapper());
             let apt = withdraw_aptos_coin_from_store(gateway_store, cumulative_unused_i_chain_execution_fee);
-            aptos_account::deposit_coins(owner_addr, apt);
+            supra_account::deposit_coins(owner_addr, apt);
         }
     }
 
@@ -797,15 +802,15 @@ module deri::gateway {
         let b_token_address = object::object_address(&b_token);
         if (l_token_id == 0) {
             l_token_id = ltoken::mint(user_address);
-            gateway_storage.d_token_states.add(l_token_id, empty_d_token_state(b_token));
+            smart_table::add(&mut gateway_storage.d_token_states, l_token_id, empty_d_token_state(b_token));
         } else {
             check_l_token_id_owner(l_token_id, user_address);
         };
         check_b_token_initialized(&gateway_storage.b_token_states, b_token);
 
         let gateway_state = &mut gateway_storage.gateway_state;
-        let b_token_state = gateway_storage.b_token_states.borrow(b_token_address);
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_id);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, b_token_address);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, l_token_id);
         let data =
             get_data_and_check_b_token_consistency(
                 gateway_state,
@@ -818,7 +823,7 @@ module deri::gateway {
 
         let request_add_liquidity_fee = gateway_storage.execution_fees.request_add_liquidity;
         // On Aptos, the APT amount must be retrieved in code, unlike EVM's msg.value, which is not used.
-        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<AptosCoin>(user, (request_add_liquidity_fee as u64)));
+        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<SupraCoin>(user, (request_add_liquidity_fee as u64)));
         let apt_amount = receive_execution_fee(
             d_token_state,
             gateway_state,
@@ -870,11 +875,11 @@ module deri::gateway {
         let gateway_param = &GatewayParam[@deri];
 
         let gateway_state = &mut gateway_storage.gateway_state;
-        let b_token_state = gateway_storage.b_token_states.borrow(b_token_address);
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_id);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, b_token_address);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, l_token_id);
 
         let request_remove_liquidity_fee = gateway_storage.execution_fees.request_remove_liquidity;
-        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<AptosCoin>(user, (request_remove_liquidity_fee as u64)));
+        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<SupraCoin>(user, (request_remove_liquidity_fee as u64)));
         receive_execution_fee(d_token_state, gateway_state, gateway_param, request_remove_liquidity_fee, apt_fee_asset);
         assert!(b_amount != 0, EINVALID_BTOKEN_AMOUNT);
 
@@ -902,7 +907,8 @@ module deri::gateway {
             new_liquidity = 0;
         };
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(data.d_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, data.d_token_id);
+
         d_token_state.current_operate_token = b_token_address;
         let request_id = increment_request_id(&mut gateway_storage.gateway_state, d_token_state);
 
@@ -948,7 +954,7 @@ module deri::gateway {
             b0_asset
         );
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
         d_token_state.b0_amount = i256::wrapping_add(d_token_state.b0_amount, i256::from(b0_amount));
     }
 
@@ -966,11 +972,12 @@ module deri::gateway {
         let gateway_param = &GatewayParam[@deri];
 
         let gateway_state = &mut gateway_storage.gateway_state;
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&b_token));
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&b_token));
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
+
 
         let request_remove_margin_fee = gateway_storage.execution_fees.request_remove_margin;
-        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<AptosCoin>(user, (request_remove_margin_fee as u64)));
+        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<SupraCoin>(user, (request_remove_margin_fee as u64)));
         receive_execution_fee(d_token_state, gateway_state, gateway_param, request_remove_margin_fee, apt_fee_asset);
 
         let data = get_data_and_check_b_token_consistency(
@@ -1013,13 +1020,13 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
 
         let request_trade_fee = gateway_storage.execution_fees.request_trade;
-        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<AptosCoin>(user, (request_trade_fee as u64)));
+        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<SupraCoin>(user, (request_trade_fee as u64)));
         receive_execution_fee(d_token_state, gateway_state, gateway_param, request_trade_fee, apt_fee_asset);
 
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&d_token_state.b_token));
 
         let data = get_data(
             gateway_state,
@@ -1033,7 +1040,7 @@ module deri::gateway {
 
         let real_money_margin = data.get_d_token_liquidity();
         let request_id = increment_request_id(&mut gateway_storage.gateway_state, d_token_state);
-        let trade_params_i265 = trade_params.map(|x| i256::from(x).to_string());
+        let trade_params_i265 = vector::map(trade_params, (|x| i256::from(x).to_string()));
 
         event::emit(RequestTrade {
             request_id,
@@ -1054,8 +1061,8 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&d_token_state.b_token));
 
         let data = get_data(
             &gateway_storage.gateway_state,
@@ -1109,11 +1116,11 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
 
         let request_trade_and_remove_margin_fee = gateway_storage.execution_fees.request_trade_and_remove_margin;
         let apt_fee_asset = coin_wrapper::wrap(
-            coin::withdraw<AptosCoin>(user, (request_trade_and_remove_margin_fee as u64))
+            coin::withdraw<SupraCoin>(user, (request_trade_and_remove_margin_fee as u64))
         );
         receive_execution_fee(
             d_token_state,
@@ -1123,7 +1130,7 @@ module deri::gateway {
             apt_fee_asset
         );
 
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&b_token));
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&b_token));
 
         let data = get_data(
             gateway_state,
@@ -1151,7 +1158,7 @@ module deri::gateway {
             cumulative_pnl_on_gateway: data.cumulative_pnl_on_gateway.to_string(),
             b_amount,
             symbol_id,
-            trade_params: trade_params.map(|x| i256::from(x).to_string())
+            trade_params: vector::map(trade_params, (|x| i256::from(x).to_string()))
         })
     }
 
@@ -1196,13 +1203,13 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(l_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, l_token_id);
 
         check_request_id(d_token_state, request_id);
         update_liquidity(gateway_state, d_token_state, liquidity, total_liquidity);
 
         // Cumulate unsettled PNL to b0_amount
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&d_token_state.b_token));
         let data = get_data_and_check_b_token_consistency(
             gateway_state,
             b_token_state,
@@ -1250,7 +1257,7 @@ module deri::gateway {
                     );
                     primary_fungible_store::deposit(data.account, b_amount_to_remove_asset);
 
-                    let gateway_store = gateway_param.gateway_stores.borrow(gateway_param.token_b0);
+                    let gateway_store = smart_table::borrow(&gateway_param.gateway_stores, gateway_param.token_b0);
                     fungible_asset::deposit(gateway_store.store, b0_amount_removed_asset);
                 }
             }
@@ -1322,8 +1329,8 @@ module deri::gateway {
         let gateway_storage = &mut GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&d_token_state.b_token));
 
         check_request_id(d_token_state, request_id);
         let data = get_data_and_check_b_token_consistency(
@@ -1402,8 +1409,8 @@ module deri::gateway {
         let gateway_param = &GatewayParam[@deri];
 
 
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
-        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&d_token_state.b_token));
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
+        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&d_token_state.b_token));
 
         let data = get_data_and_check_b_token_consistency(
             &gateway_storage.gateway_state,
@@ -1422,7 +1429,7 @@ module deri::gateway {
         data.last_cumulative_pnl_on_engine = cumulative_pnl_on_engine;
 
         let b0_amount_in = 0;
-        let gateway_b_store = gateway_param.gateway_stores.borrow(d_token_state.b_token);
+        let gateway_b_store = smart_table::borrow(&gateway_param.gateway_stores, d_token_state.b_token);
 
         {
             let b_asset = vault::redeem(
@@ -1461,7 +1468,7 @@ module deri::gateway {
         lp_pnl = i256::wrapping_sub(lp_pnl, reward);
 
         if (b0_amount_in > 0) {
-            let gateway_b_store = gateway_param.gateway_stores.borrow(gateway_param.token_b0);
+            let gateway_b_store = smart_table::borrow(&gateway_param.gateway_stores, gateway_param.token_b0);
             let gateway_b_signer = &object::generate_signer_for_extending(&gateway_b_store.store_extend_ref);
             let b0_asset = fungible_asset::withdraw(gateway_b_signer, gateway_b_store.store, (b0_amount_in as u64));
             vault::deposit(
@@ -1525,11 +1532,12 @@ module deri::gateway {
         let start_byte = position * 32;
         let end_byte = start_byte + 32;
 
-        event_data.slice(start_byte, end_byte)
+        vector::slice(&event_data, start_byte, end_byte)
     }
 
     public fun vector_to_u256(data: vector<u8>): u256 {
-        data.reverse();
+        vector::reverse(&mut data);
+
         from_bcs::to_u256(data)
     }
 
@@ -1550,11 +1558,10 @@ module deri::gateway {
 
         if (p_token_id == 0) {
             p_token_id = ptoken::mint(user_addr);
-            gateway_storage.d_token_states.add(p_token_id,
-                empty_d_token_state(b_token));
+            smart_table::add(&mut gateway_storage.d_token_states, p_token_id, empty_d_token_state(b_token));
 
             if (single_position) {
-                let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
+                let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
                 d_token_state.single_position = true;
             }
         } else {
@@ -1563,10 +1570,11 @@ module deri::gateway {
         check_b_token_initialized(&gateway_storage.b_token_states, b_token);
 
         let gateway_state = &mut gateway_storage.gateway_state;
-        let d_token_state = gateway_storage.d_token_states.borrow_mut(p_token_id);
+        let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
+
         let data = get_data_and_check_b_token_consistency(
             gateway_state,
-            gateway_storage.b_token_states.borrow(object::object_address(&b_token)),
+            smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&b_token)),
             d_token_state,
             user_addr,
             p_token_id,
@@ -1671,7 +1679,7 @@ module deri::gateway {
         b_token_states: &SmartTable<address, BTokenState>, b_token: Object<Metadata>
     ) {
         let b_token_address = object::object_address(&b_token);
-        assert!(b_token_states.contains(b_token_address), EINVALID_BTOKEN);
+        assert!(smart_table::contains(b_token_states, b_token_address), EINVALID_BTOKEN);
     }
 
     fun check_b_token_consistency(
@@ -1748,7 +1756,7 @@ module deri::gateway {
                 gateway_store.store,
                 (last_request_i_chain_execution_fee as u64)
             );
-            aptos_account::deposit_coins(to, coin_wrapper::unwrap<AptosCoin>(apt_wrapper_asset));
+            supra_account::deposit_coins(to, coin_wrapper::unwrap<SupraCoin>(apt_wrapper_asset));
         }
     }
 
@@ -2217,7 +2225,7 @@ module deri::gateway {
     }
 
     inline fun get_aptos_coin_wrapper(): Object<Metadata> {
-        coin_wrapper::get_wrapper<AptosCoin>()
+        coin_wrapper::get_wrapper<SupraCoin>()
     }
 
     inline fun create_gateway_store(token: Object<Metadata>): GatewayStore {
@@ -2230,7 +2238,7 @@ module deri::gateway {
     }
 
     inline fun get_gateway_store(gateway_param: &GatewayParam, token: Object<Metadata>): &GatewayStore {
-        gateway_param.gateway_stores.borrow(token)
+        smart_table::borrow(&gateway_param.gateway_stores, token)
     }
 
     inline fun withdraw_aptos_coin_wrapper(
@@ -2244,9 +2252,9 @@ module deri::gateway {
     inline fun withdraw_aptos_coin_from_store(
         store: &GatewayStore,
         amount: u256
-    ): Coin<AptosCoin> {
+    ): Coin<SupraCoin> {
         let gateway_signer = &object::generate_signer_for_extending(&store.store_extend_ref);
-        coin_wrapper::unwrap<AptosCoin>(fungible_asset::withdraw(gateway_signer, store.store, (amount as u64)))
+        coin_wrapper::unwrap<SupraCoin>(fungible_asset::withdraw(gateway_signer, store.store, (amount as u64)))
     }
 
     inline fun empty_d_token_state(b_token: Object<Metadata>): DTokenState {
@@ -2274,7 +2282,7 @@ module deri::gateway {
     #[test_only]
     public fun init_for_test(deployer: &signer, token_b0: Object<Metadata>) {
         // create wrap APT
-        coin_wrapper::create_fungible_asset<AptosCoin>();
+        coin_wrapper::create_fungible_asset<SupraCoin>();
 
         let gateway_storage = GatewayStorage {
             gateway_state: GatewayState {
@@ -2420,7 +2428,7 @@ module deri::gateway {
     public fun get_vault_b0_address(): address acquires GatewayStorage, GatewayParam {
         let gateway_storage = &GatewayStorage[@deri];
         let gateway_param = &GatewayParam[@deri];
-        let b_token_state = gateway_storage.b_token_states.borrow( object::object_address(&gateway_param.token_b0));
+        let b_token_state = gateway_storage.b_token_states.borrow(object::object_address(&gateway_param.token_b0));
         b_token_state.vault
     }
 }

@@ -1,8 +1,8 @@
 module deri::coin_wrapper {
-    use aptos_framework::account::{Self, SignerCapability};
-    use aptos_framework::aptos_account;
-    use aptos_framework::coin::{Self, Coin};
-    use aptos_framework::fungible_asset::{
+    use supra_framework::account::{Self, SignerCapability};
+    use supra_framework::supra_account;
+    use supra_framework::coin::{Self, Coin};
+    use supra_framework::fungible_asset::{
         Self,
         BurnRef,
         FungibleAsset,
@@ -10,8 +10,8 @@ module deri::coin_wrapper {
         MintRef,
         TransferRef
     };
-    use aptos_framework::object::{Self, Object};
-    use aptos_framework::primary_fungible_store;
+    use supra_framework::object::{Self, Object};
+    use supra_framework::primary_fungible_store;
     use aptos_std::smart_table::{Self, SmartTable};
     use aptos_std::string_utils;
     use aptos_std::type_info;
@@ -59,17 +59,17 @@ module deri::coin_wrapper {
     #[view]
     public fun is_supported<CoinType>(): bool acquires WrapperAccount {
         let coin_type = type_info::type_name<CoinType>();
-        wrapper_account().coin_to_fungible_asset.contains(coin_type)
+        smart_table::contains(&wrapper_account().coin_to_fungible_asset, coin_type)
     }
 
     #[view]
     public fun is_wrapper(metadata: Object<Metadata>): bool acquires WrapperAccount {
-        wrapper_account().fungible_asset_to_coin.contains(metadata)
+        smart_table::contains(&wrapper_account().fungible_asset_to_coin, metadata)
     }
 
     #[view]
     public fun get_coin_type(metadata: Object<Metadata>): String acquires WrapperAccount {
-        *wrapper_account().fungible_asset_to_coin.borrow(metadata)
+        *smart_table::borrow(&wrapper_account().fungible_asset_to_coin, metadata)
     }
 
     #[view]
@@ -95,7 +95,7 @@ module deri::coin_wrapper {
         // This will create "@0x123"
         let fa_address_str = string_utils::to_string(&fa_address);
         // We want to strip the prefix "@"
-        fa_address_str.sub_string(1, fa_address_str.length())
+        string::sub_string(&fa_address_str, 1, string::length(&fa_address_str))
     }
 
     public(friend) fun wrap<CoinType>(coins: Coin<CoinType>): FungibleAsset acquires WrapperAccount {
@@ -103,7 +103,7 @@ module deri::coin_wrapper {
         create_fungible_asset<CoinType>();
 
         let amount = coin::value(&coins);
-        aptos_account::deposit_coins(wrapper_address(), coins);
+        supra_account::deposit_coins(wrapper_address(), coins);
         let mint_ref = &fungible_asset_data<CoinType>().mint_ref;
         fungible_asset::mint(mint_ref, amount)
     }
@@ -120,9 +120,9 @@ module deri::coin_wrapper {
         let coin_type = format_coin<CoinType>();
         let wrapper_account = mut_wrapper_account();
         let coin_to_fungible_asset = &mut wrapper_account.coin_to_fungible_asset;
-        if (!coin_to_fungible_asset.contains(coin_type)) {
+        if (!smart_table::contains(coin_to_fungible_asset, coin_type)) {
             let metadata_constructor_ref =
-                &object::create_named_object(wrapper_signer, *coin_type.bytes());
+                &object::create_named_object(wrapper_signer, *string::bytes(&coin_type));
             primary_fungible_store::create_primary_store_enabled_fungible_asset(
                 metadata_constructor_ref,
                 // Coin doesn't have maximum supply.
@@ -140,12 +140,11 @@ module deri::coin_wrapper {
             let burn_ref = fungible_asset::generate_burn_ref(metadata_constructor_ref);
             let transfer_ref = fungible_asset::generate_transfer_ref(metadata_constructor_ref);
             let metadata = object::object_from_constructor_ref<Metadata>(metadata_constructor_ref);
-            coin_to_fungible_asset.add(
-                coin_type, FungibleAssetData { metadata, mint_ref, transfer_ref, burn_ref }
-            );
-            wrapper_account.fungible_asset_to_coin.add(metadata, coin_type);
+
+            smart_table::add(coin_to_fungible_asset, coin_type, FungibleAssetData { metadata, mint_ref, transfer_ref, burn_ref });
+            smart_table::add(&mut wrapper_account.fungible_asset_to_coin, metadata, coin_type);
         };
-        coin_to_fungible_asset.borrow(coin_type).metadata
+        smart_table::borrow(coin_to_fungible_asset, coin_type).metadata
     }
 
     inline fun coin_wrapper_signer(): &signer acquires WrapperAccount {
@@ -154,7 +153,7 @@ module deri::coin_wrapper {
 
     inline fun fungible_asset_data<CoinType>(): &FungibleAssetData acquires WrapperAccount {
         let coin_type = type_info::type_name<CoinType>();
-        wrapper_account().coin_to_fungible_asset.borrow(coin_type)
+        smart_table::borrow(&wrapper_account().coin_to_fungible_asset, coin_type)
     }
 
     inline fun wrapper_account(): &WrapperAccount acquires WrapperAccount {

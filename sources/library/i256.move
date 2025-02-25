@@ -1,5 +1,6 @@
 module deri::i256 {
     use std::string::{Self, String};
+    use std::vector;
     use aptos_std::math64;
     use aptos_std::string_utils;
 
@@ -226,11 +227,11 @@ module deri::i256 {
     public fun to_string(self: I256): String {
         let s = string::utf8(b"");
         if (is_neg(self)) {
-            s.append(string::utf8(b"-"));
-            s.append(u256_to_string(abs_u256(self)));
+            string::append(&mut s, string::utf8(b"-"));
+            string::append(&mut s, (u256_to_string(abs_u256(self))));
             s
         } else {
-            s.append(u256_to_string(as_u256(self)));
+            string::append(&mut s, u256_to_string(as_u256(self)));
             s
         }
     }
@@ -241,12 +242,12 @@ module deri::i256 {
 
     public fun string_to_u256(s: String): u256 {
         let num: u256 = 0;
-        let len = (s.length() as u256);
+        let len = (string::length(&s) as u256);
         let i = 0;
 
         while (i < len) {
-            let bytes = *s.bytes();
-            let c = bytes[(i as u64)];
+            let bytes = *string::bytes(&s);
+            let c = *vector::borrow(&bytes, i as u64);
             let digit = char_to_digit(c);
             num = num * 10 + digit; // Shift left by one decimal place and add the new digit
             i += 1;

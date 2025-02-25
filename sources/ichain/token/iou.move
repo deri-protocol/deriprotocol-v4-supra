@@ -4,9 +4,9 @@
 *      Traders can later redeem these IOU tokens for B0 after a rebalance operation.
 */
 module deri::iou {
-    use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata};
-    use aptos_framework::object::{Self, Object};
-    use aptos_framework::primary_fungible_store;
+    use supra_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata};
+    use supra_framework::object::{Self, Object};
+    use supra_framework::primary_fungible_store;
     use std::option;
     use std::string::utf8;
 
@@ -19,7 +19,7 @@ module deri::iou {
     const ICON_URL: vector<u8> = b"";
     const PROJECT_URL: vector<u8> = b"";
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct ManagedFungibleAsset has key {
         mint_ref: MintRef,
         transfer_ref: TransferRef,

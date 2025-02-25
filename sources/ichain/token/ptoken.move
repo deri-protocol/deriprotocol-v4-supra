@@ -5,9 +5,9 @@
 *      participation in various activities within the ecosystem.
 */
 module deri::ptoken {
-    use aptos_framework::chain_id;
-    use aptos_framework::event;
-    use aptos_framework::object::{Self, ExtendRef, Object};
+    use supra_framework::chain_id;
+    use supra_framework::event;
+    use supra_framework::object::{Self, ExtendRef, Object};
     use aptos_token_objects::collection::{Self, MutatorRef};
     use aptos_token_objects::token::{Self, BurnRef};
     use std::bcs;
@@ -24,7 +24,7 @@ module deri::ptoken {
     const URI: vector<u8> = b"";
     const UNIQUE_IDENTIFIER: u8 = 2;
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct CollectionConfig has key {
         creator: ExtendRef,
         // For modifying the NFT collection's name, description or image uri in case.
@@ -33,7 +33,7 @@ module deri::ptoken {
         base_token_id: u256
     }
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     // These are permissions to modify the NFT as Fungible Assets
     struct PToken has key {
         burn_ref: BurnRef
