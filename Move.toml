@@ -4,16 +4,16 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-deri = "0xcafe"
-admin = "0xcafe1"
-protocol_fee_manager = "0xcafe1"
-liq_claim = "0xcafe1"
-b0_token = "0xdb0a9c771aad8de01c250de6b4230c16c7a0475f333c8da2e68040c9ca5e704e"
+deri = "_"
+admin = "_"
+protocol_fee_manager = "_"
+liq_claim = "_"
+b0_token = "_"
 
 [dev-addresses]
 
 [dependencies]
-SupraFramework = { git = "https://github.com/tuvuanh27/aptos-core.git", subdir = "aptos-move/framework/supra-framework", rev = "fix/vesting_without_staking.spec.move" }
-AptosTokenObjects = { git = "https://github.com/tuvuanh27/aptos-core.git", subdir = "aptos-move/framework/aptos-token-objects", rev = "fix/vesting_without_staking.spec.move" }
+SupraFramework = { git = "https://github.com/Entropy-Foundation/aptos-core.git", subdir = "aptos-move/framework/supra-framework", rev = "dev" }
+AptosTokenObjects = { git = "https://github.com/Entropy-Foundation/aptos-core.git", subdir = "aptos-move/framework/aptos-token-objects", rev = "dev" }
 
 [dev-dependencies]

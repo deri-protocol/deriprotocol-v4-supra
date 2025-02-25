@@ -38,25 +38,25 @@ module deri::global_state {
         object::create_object_address(&@deri, GLOBAL_STATE_NAME)
     }
 
-    friend fun config_signer(): signer acquires GlobalState {
-        object::generate_signer_for_extending(&GlobalState[@deri].extend_ref)
+    public(friend) fun config_signer(): signer acquires GlobalState {
+        object::generate_signer_for_extending(&borrow_global<GlobalState>(@deri).extend_ref)
     }
 
     public entry fun transfer_admin(admin: &signer, new_admin: address) acquires GlobalState {
         assert_is_admin(admin);
-        let global_config = &mut GlobalState[@deri];
+        let global_config =borrow_global_mut<GlobalState>(@deri);
         global_config.pending_admin = new_admin;
     }
 
     public entry fun accept_admin(new_admin: &signer) acquires GlobalState {
-        let global_config = &mut GlobalState[@deri];
+        let global_config =borrow_global_mut<GlobalState>(@deri);
         assert!(signer::address_of(new_admin) == global_config.pending_admin, ENOT_AUTHORIZED);
         global_config.admin = global_config.pending_admin;
         global_config.pending_admin = @0x0;
     }
 
     public fun assert_is_admin(admin: &signer) acquires GlobalState {
-        let config = &GlobalState[@deri];
+        let config = borrow_global<GlobalState>(@deri);
         assert!(signer::address_of(admin) == config.admin, ENOT_AUTHORIZED);
     }
 

@@ -54,17 +54,17 @@ module deri::iou {
         object::address_to_object<Metadata>(asset_address)
     }
 
-    friend fun mint(to: address, amount: u64) acquires ManagedFungibleAsset {
+    public(friend) fun mint(to: address, amount: u64) acquires ManagedFungibleAsset {
         let asset = get_metadata();
-        let managed_fungible_asset = &ManagedFungibleAsset[@deri];
+        let managed_fungible_asset = borrow_global<ManagedFungibleAsset>(@deri);
         let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
         let fa = fungible_asset::mint(&managed_fungible_asset.mint_ref, amount);
         fungible_asset::deposit_with_ref(&managed_fungible_asset.transfer_ref, to_wallet, fa);
     }
 
-    friend fun burn(from: address, amount: u64) acquires ManagedFungibleAsset {
+    public(friend) fun burn(from: address, amount: u64) acquires ManagedFungibleAsset {
         let asset = get_metadata();
-        let burn_ref = &ManagedFungibleAsset[@deri].burn_ref;
+        let burn_ref = &borrow_global<ManagedFungibleAsset>(@deri).burn_ref;
         let from_wallet = primary_fungible_store::primary_store(from, asset);
         fungible_asset::burn_from(burn_ref, from_wallet, amount);
     }

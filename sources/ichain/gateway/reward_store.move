@@ -53,8 +53,8 @@ module deri::reward_store {
     }
 
     /// Allows a user to claim their reward.
-    friend fun claim_reward(user_address: vector<u8>, recipient: address) acquires RewardStore {
-        let reward_store = &mut RewardStore[@deri];
+    public(friend) fun claim_reward(user_address: vector<u8>, recipient: address) acquires RewardStore {
+        let reward_store = borrow_global_mut<RewardStore>(@deri);
         let reward = *smart_table::borrow(&reward_store.reward, user_address);
         assert!(reward > 0, EREWARD_ZERO);
 
@@ -76,9 +76,15 @@ module deri::reward_store {
     }
 
     /// Deposits a reward into the user's balance.
-    friend fun deposit_reward(user_address: vector<u8>, reward_amount: u64) acquires RewardStore {
-        let reward_store = &mut RewardStore[@deri];
-        let current_reward_amount = *smart_table::borrow(&reward_store.reward, user_address);
+    public(friend) fun deposit_reward(user_address: vector<u8>, reward_amount: u64) acquires RewardStore {
+        let reward_store = borrow_global_mut<RewardStore>(@deri);
+
+        let current_reward_amount = if (!smart_table::contains(&reward_store.reward, user_address)) {
+            smart_table::add(&mut reward_store.reward, user_address, 0);
+            0
+        } else {
+           *smart_table::borrow(&reward_store.reward, user_address)
+        };
 
         smart_table::upsert(&mut reward_store.reward, user_address, current_reward_amount + reward_amount);
 

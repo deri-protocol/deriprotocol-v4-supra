@@ -77,7 +77,7 @@ module deri::vault {
 
     /// Create a new vault with the given asset.
     /// Only gateway module can call friend function.
-    friend fun create_vault(asset: Object<Metadata>): Object<Vault> {
+    public(friend) fun create_vault(asset: Object<Metadata>): Object<Vault> {
         let vault = &object::create_named_object(&global_state::config_signer(), bcs::to_bytes(&asset));
         let vault_signer = object::generate_signer(vault);
         move_to(
@@ -101,7 +101,7 @@ module deri::vault {
 
     /// Deposit assets into the vault associated with a specific 'dtoken'.
     /// Only gateway module can call friend function.
-    friend fun deposit(
+    public(friend) fun deposit(
         vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset
     ): u256 acquires Vault {
         let minted_ts;
@@ -110,7 +110,8 @@ module deri::vault {
         let vault_address = object::object_address(&vault);
         primary_fungible_store::deposit(vault_address, asset);
 
-        let vault = &mut Vault[object::object_address(&vault)];
+        let vault = borrow_global_mut<Vault>(object::object_address(&vault));
+
         if (vault.st_total_amount == 0) {
             minted_ts = safe_math256::rescale(amount, asset_decimals, SCALE_DECIMALS);
             assert!(minted_ts > BILLION, ETINY_SHARE_OF_INIT_DEPOSIT);
@@ -122,21 +123,21 @@ module deri::vault {
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amounts = &mut vault.st_amounts;
         let st_amount = *smart_table::borrow_with_default(st_amounts, d_token_id, &0);
-        st_amount += minted_ts;
+        st_amount = st_amount + minted_ts;
         smart_table::upsert(st_amounts, d_token_id, st_amount);
-        vault.st_total_amount += minted_ts;
+        vault.st_total_amount = vault.st_total_amount + minted_ts;
 
         minted_ts
     }
 
     /// Redeem staked tokens and receive assets from the vault associated with a specific 'dToken'
     /// Only gateway module can call friend function.
-    friend fun redeem(
+    public(friend) fun redeem(
         vault: Object<Vault>, d_token_id: u256, amount: u256
     ): FungibleAsset acquires Vault {
         let redeemed_amount;
         let vault_address = object::object_address(&vault);
-        let vault = &mut Vault[object::object_address(&vault)];
+        let vault = borrow_global_mut<Vault>(object::object_address(&vault));
         let st_amount = *smart_table::borrow(&vault.st_amounts, d_token_id);
 
         if (st_amount == 0) {
@@ -164,9 +165,9 @@ module deri::vault {
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amount = *smart_table::borrow_mut(&mut vault.st_amounts, d_token_id);
-        st_amount -= burned_st;
+        st_amount = st_amount - burned_st;
         smart_table::upsert(&mut vault.st_amounts, d_token_id, st_amount);
-        vault.st_total_amount -= burned_st;
+        vault.st_total_amount = vault.st_total_amount - burned_st;
 
         primary_fungible_store::withdraw(
             &object::generate_signer_for_extending(&vault.extend_ref),
@@ -176,7 +177,7 @@ module deri::vault {
     }
 
     inline fun vault_data<T: key>(vault: Object<T>): &Vault {
-        &Vault[object::object_address(&vault)]
+        borrow_global<Vault>(object::object_address(&vault))
     }
 
     #[test_only]

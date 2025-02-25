@@ -157,11 +157,11 @@ module deri::coin_wrapper {
     }
 
     inline fun wrapper_account(): &WrapperAccount acquires WrapperAccount {
-        &WrapperAccount[wrapper_address()]
+        borrow_global<WrapperAccount>(wrapper_address())
     }
 
     inline fun mut_wrapper_account(): &mut WrapperAccount acquires WrapperAccount {
-        &mut WrapperAccount[wrapper_address()]
+        borrow_global_mut<WrapperAccount>(wrapper_address())
     }
 
     #[test_only]

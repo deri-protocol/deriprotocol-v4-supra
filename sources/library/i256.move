@@ -160,7 +160,7 @@ module deri::i256 {
                 result = mul(result, b);
             };
             b = mul(b, b);
-            exp >>= 1;
+            exp = exp >> 1;
         };
         result
     }
@@ -247,10 +247,10 @@ module deri::i256 {
 
         while (i < len) {
             let bytes = *string::bytes(&s);
-            let c = *vector::borrow(&bytes, i as u64);
+            let c = *vector::borrow(&bytes, (i as u64));
             let digit = char_to_digit(c);
             num = num * 10 + digit; // Shift left by one decimal place and add the new digit
-            i += 1;
+            i = i + 1;
         };
         num
     }

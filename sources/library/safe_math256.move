@@ -4,7 +4,7 @@ module deri::safe_math256 {
     public fun div_rounding_up(a: u256, b: u256): u256 {
         let c = a / b;
         if (b * c != a) {
-            c += 1
+            c = c + 1
         };
         c
     }

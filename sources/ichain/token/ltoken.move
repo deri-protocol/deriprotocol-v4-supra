@@ -103,9 +103,9 @@ module deri::ltoken {
         borrow_global<CollectionConfig>(@deri).total_minted
     }
 
-    friend fun mint(to: address): u256 acquires CollectionConfig {
-        let collection_config = &mut CollectionConfig[@deri];
-        collection_config.total_minted += 1;
+    public(friend) fun mint(to: address): u256 acquires CollectionConfig {
+        let collection_config = borrow_global_mut<CollectionConfig>(@deri);
+        collection_config.total_minted = collection_config.total_minted + 1;
 
         let nft =
             &token::create_named_token(
@@ -131,7 +131,7 @@ module deri::ltoken {
         collection_config.base_token_id + collection_config.total_minted
     }
 
-    friend fun burn(token_id: u256) acquires LToken, CollectionConfig {
+    public(friend) fun burn(token_id: u256) acquires LToken, CollectionConfig {
         let nft_addr = get_token_address(token_id);
         let nft = object::address_to_object<LToken>(nft_addr);
         let owner_address = object::owner(nft);
@@ -143,7 +143,7 @@ module deri::ltoken {
     }
 
     inline fun creator_signer(): &signer acquires CollectionConfig {
-        &object::generate_signer_for_extending(&CollectionConfig[@deri].creator)
+        &object::generate_signer_for_extending(&borrow_global<CollectionConfig>(@deri).creator)
     }
 
     #[test_only]
