@@ -64,7 +64,7 @@ module deri::iou {
 
     friend fun burn(from: address, amount: u64) acquires ManagedFungibleAsset {
         let asset = get_metadata();
-        let burn_ref = &ManagedFungibleAsset[object::object_address(&asset)].burn_ref;
+        let burn_ref = &ManagedFungibleAsset[@deri].burn_ref;
         let from_wallet = primary_fungible_store::primary_store(from, asset);
         fungible_asset::burn_from(burn_ref, from_wallet, amount);
     }
