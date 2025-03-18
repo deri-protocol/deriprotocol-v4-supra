@@ -1923,12 +1923,12 @@ module deri::gateway {
                 // Redeem B0 tokens to cover the negative B0 amount.
                 b_amount = b_amount + i256::abs_u256(data.b0_amount);
             } else {
-                b_amount = b_amount + i256::abs_u256(data.b0_amount) * UONE / data.b_price;
+                b_amount = b_amount + i256::abs_u256(data.b0_amount) * UONE / data.b_price * 105 / 100;
             }
         };
 
         // Redeem tokens from the vault
-        // currentlly only support vault implementation none
+        // currently only support vault implementation none
         let vault_obj = object::address_to_object<Vault>(data.vault);
         let b_fungible_asset = vault::redeem(
             vault_obj,
@@ -2051,8 +2051,8 @@ module deri::gateway {
                     b0_out = amount;
                     b0_amount_in = b0_amount_in - amount;
                 };
-                b0_amount_out = b0_out;
-                data.b0_amount = i256::sub(data.b0_amount, i256::from(iou_amount));
+                b0_amount_out = b0_amount_out + b0_out;
+                data.b0_amount = i256::sub(i256::from(b0_out), i256::from(iou_amount));
             };
         };
 
