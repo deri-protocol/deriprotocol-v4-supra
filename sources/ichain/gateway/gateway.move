@@ -2052,7 +2052,7 @@ module deri::gateway {
                     b0_amount_in = b0_amount_in - amount;
                 };
                 b0_amount_out = b0_amount_out + b0_out;
-                data.b0_amount = i256::sub(i256::from(b0_out), i256::from(iou_amount));
+                data.b0_amount = i256::sub(data.b0_amount, i256::add(i256::from(b0_out), i256::from(iou_amount)));
             };
         };
 
