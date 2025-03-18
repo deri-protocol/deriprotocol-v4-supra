@@ -1174,7 +1174,7 @@ module deri::gateway {
             cumulative_pnl_on_gateway: i256::to_string(data.cumulative_pnl_on_gateway),
             b_amount,
             symbol_id,
-            trade_params: vector::map(trade_params, (|x| i256::to_string(i256::from(x))))
+            trade_params: vector::map(trade_params, (|x| i256::to_string(i256::from_uncheck(x))))
         })
     }
 
