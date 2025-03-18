@@ -1935,7 +1935,7 @@ module deri::gateway {
             data.d_token_id,
             b_amount
         );
-        let b_amount = (fungible_asset::amount(&b_fungible_asset) as u256);
+        b_amount = (fungible_asset::amount(&b_fungible_asset) as u256);
         fungible_asset::deposit(token_b_store.store, b_fungible_asset);
 
         // Amount of B0 tokens going to reserves.
@@ -1947,10 +1947,10 @@ module deri::gateway {
 
         // Handle excessive tokens (more than bAmountOut).
         if (b_amount > b_amount_out) {
-            let b_excesive = b_amount - b_amount_out;
+            let b_excessive = b_amount - b_amount_out;
             let b0_excessive;
             if (data.b_token == gateway_param.token_b0) {
-                b0_excessive = b_excesive;
+                b0_excessive = b_excessive;
                 b_amount = b_amount - b0_excessive;
             } else if (data.b_token == get_aptos_coin_wrapper()) {
                 // TODO: swap APT to B0
