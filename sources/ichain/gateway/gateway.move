@@ -1056,7 +1056,7 @@ module deri::gateway {
 
         let real_money_margin = get_d_token_liquidity(&data, gateway_param);
         let request_id = increment_request_id(&mut gateway_storage.gateway_state, d_token_state);
-        let trade_params_i265 = vector::map(trade_params, (|x| i256::to_string(i256::from(x))));
+        let trade_params_i265 = vector::map(trade_params, (|x| i256::to_string(i256::from_uncheck(x))));
 
         event::emit(RequestTrade {
             request_id,
