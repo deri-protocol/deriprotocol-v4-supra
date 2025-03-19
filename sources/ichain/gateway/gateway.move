@@ -1355,7 +1355,7 @@ module deri::gateway {
             &gateway_storage.gateway_state,
             b_token_state,
             d_token_state,
-            user_addr,
+            ptoken::owner(p_token_id),
             p_token_id,
             b_token
         );
