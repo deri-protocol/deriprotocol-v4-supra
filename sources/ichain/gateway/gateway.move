@@ -1370,7 +1370,7 @@ module deri::gateway {
 
         get_ex_params(&mut data, b_token_state, gateway_param);
         let b_amount = transfer_out(&mut data, gateway_param, b_amount_to_remove, true);
-        assert!(get_d_token_liquidity(&data, gateway_param) > required_margin, EINSUFFICIENT_MARGIN);
+        assert!(get_d_token_liquidity(&data, gateway_param) >= required_margin, EINSUFFICIENT_MARGIN);
 
         let gateway_state = &mut gateway_storage.gateway_state;
         save_data(&data, gateway_state, d_token_state);
