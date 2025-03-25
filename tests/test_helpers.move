@@ -1,12 +1,12 @@
 #[test_only]
 module deri::test_helpers {
-    use aptos_framework::account;
-    use aptos_framework::aptos_coin::{Self, AptosCoin};
-    use aptos_framework::coin::{Self, Coin, MintCapability};
-    use aptos_framework::fungible_asset::{Self, FungibleAsset, MintRef, Metadata};
-    use aptos_framework::object::{Self, Object};
-    use aptos_framework::primary_fungible_store;
-    use aptos_framework::timestamp;
+    use supra_framework::account;
+    use supra_framework::supra_coin::{Self, SupraCoin};
+    use supra_framework::coin::{Self, Coin, MintCapability};
+    use supra_framework::fungible_asset::{Self, FungibleAsset, MintRef, Metadata};
+    use supra_framework::object::{Self, Object};
+    use supra_framework::primary_fungible_store;
+    use supra_framework::timestamp;
     use aptos_std::debug;
     use aptos_std::smart_table::{Self, SmartTable};
     use deri::coin_wrapper;
@@ -18,7 +18,7 @@ module deri::test_helpers {
     use std::option;
     use std::signer;
     use std::string;
-    use aptos_framework::chain_id;
+    use supra_framework::chain_id;
     use deri::vault;
 
     struct TestCoin<phantom R> has key {
@@ -34,11 +34,9 @@ module deri::test_helpers {
         let admin = admin();
 
         chain_id::initialize_for_test(aptos_fx(), 10);
-        let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(aptos_fx());
+        let (burn_cap, mint_cap) = supra_coin::initialize_for_test(aptos_fx());
 
-        move_to(deployer, TestCoin<AptosCoin> {
-            mint_cap
-        });
+        move_to(deployer, TestCoin<SupraCoin> { mint_cap });
 
         // Set up b0 token
         let b0_metadata = create_fungible_asset(b"USDC", 6);
@@ -57,7 +55,13 @@ module deri::test_helpers {
 
         // add _token is b0
         let vault_b0_addr = vault::vault_address(b0_metadata);
-        gateway::add_b_token(admin, b0_metadata, vault_b0_addr, string::utf8(b"1"),  1_000_000_000_000_000_000);
+        gateway::add_b_token(
+            admin,
+            b0_metadata,
+            vault_b0_addr,
+            string::utf8(b"1"),
+            1_000_000_000_000_000_000
+        );
     }
 
     /// Prints a string on its own line.
@@ -82,35 +86,20 @@ module deri::test_helpers {
     }
 
     public fun create_coin<CoinType>() {
-        let (burn_cap, freeze_cap, mint_cap) = coin::initialize<CoinType>(
-            deri(),
-            string::utf8(b"Test"),
-            string::utf8(b"Test"),
-            8,
-            true,
-        );
+        let (burn_cap, freeze_cap, mint_cap) =
+            coin::initialize<CoinType>(deri(), string::utf8(b"Test"), string::utf8(b"Test"), 8, true);
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_freeze_cap(freeze_cap);
-        move_to(deri(), TestCoin<CoinType> {
-            mint_cap
-        });
+        move_to(deri(), TestCoin<CoinType> { mint_cap });
     }
 
     public fun mint_coin<CoinType>(amount: u64): Coin<CoinType> acquires TestCoin {
-        coin::mint<CoinType>(
-            amount,
-            &TestCoin<CoinType>[signer::address_of(deri())].mint_cap
-        )
+        coin::mint<CoinType>(amount, &borrow_global<TestCoin<CoinType>>(@deri).mint_cap)
     }
 
-    public fun create_fungible_asset(
-        name: vector<u8>,
-        decimals: u8,
-    ): Object<Metadata> acquires FungibleCap {
+    public fun create_fungible_asset(name: vector<u8>, decimals: u8): Object<Metadata> acquires FungibleCap {
         if (!exists<FungibleCap>(signer::address_of(deri()))) {
-            move_to(deri(), FungibleCap {
-                mint_cap: smart_table::new()
-            });
+            move_to(deri(), FungibleCap { mint_cap: smart_table::new() });
         };
         let token_metadata = &object::create_named_object(deri(), name);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -120,30 +109,23 @@ module deri::test_helpers {
             string::utf8(name),
             decimals,
             string::utf8(b""),
-            string::utf8(b""),
+            string::utf8(b"")
         );
-        let fungible_cap = &mut FungibleCap[signer::address_of(deri())];
+        let fungible_cap = borrow_global_mut<FungibleCap>(@deri);
         let metadata = object::object_from_constructor_ref(token_metadata);
-        fungible_cap.mint_cap.add(
-            metadata,
-            fungible_asset::generate_mint_ref(token_metadata)
-        );
+        smart_table::add(&mut fungible_cap.mint_cap, metadata, fungible_asset::generate_mint_ref(token_metadata));
 
         metadata
     }
 
-    public fun mint_fungible_asset(
-        asset: Object<Metadata>,
-        amount: u64,
-    ): FungibleAsset acquires FungibleCap {
-        fungible_asset::mint(
-            FungibleCap[signer::address_of(deri())].mint_cap.borrow(asset),
-            amount
-        )
+    public fun mint_fungible_asset(asset: Object<Metadata>, amount: u64): FungibleAsset acquires FungibleCap {
+        let fungible_cap = borrow_global<FungibleCap>(@deri);
+
+        fungible_asset::mint(smart_table::borrow(&fungible_cap.mint_cap, asset), amount)
     }
 
     public fun get_b0_metadata(): Object<Metadata> {
-        let (_, b0_metadata_addr, _, _, _, _, _, _, _, ) = gateway::get_gateway_param();
+        let (_, b0_metadata_addr, _, _, _, _, _, _, _) = gateway::get_gateway_param();
         b0_metadata_addr
     }
 }

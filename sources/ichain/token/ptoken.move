@@ -53,8 +53,7 @@ module deri::ptoken {
 
     fun init_module(deployer: &signer) {
         // Create an unlimited NFT collection with no royalty
-        let creator =
-            &object::create_named_object(deployer, PTOKEN_COLLECTION_NAME);
+        let creator = &object::create_named_object(deployer, PTOKEN_COLLECTION_NAME);
         let collection =
             &collection::create_unlimited_collection(
                 &object::generate_signer(creator),
@@ -77,14 +76,16 @@ module deri::ptoken {
     #[view]
     public fun collection_address(): address acquires CollectionConfig {
         let creator_addr = signer::address_of(creator_signer());
-        collection::create_collection_address(
-            &creator_addr, &string::utf8(PTOKEN_COLLECTION_NAME)
-        )
+        collection::create_collection_address(&creator_addr, &string::utf8(PTOKEN_COLLECTION_NAME))
     }
 
     #[view]
     public fun get_token_address(token_id: u256): address acquires CollectionConfig {
-        let seed = token::create_token_seed(&string::utf8(PTOKEN_COLLECTION_NAME), &string::utf8(bcs::to_bytes(&token_id)));
+        let seed =
+            token::create_token_seed(
+                &string::utf8(PTOKEN_COLLECTION_NAME),
+                &string::utf8(bcs::to_bytes(&token_id))
+            );
         let signer_addr = signer::address_of(creator_signer());
         object::create_object_address(&signer_addr, seed)
     }
@@ -109,10 +110,10 @@ module deri::ptoken {
             &token::create_named_token(
                 &object::generate_signer_for_extending(&collection_config.creator),
                 string::utf8(PTOKEN_COLLECTION_NAME),
-                string::utf8(b""),
+                string::utf8(PTOKEN_COLLECTION_DESC),
                 string::utf8(bcs::to_bytes(&(collection_config.base_token_id + collection_config.total_minted))),
                 option::none(),
-                string::utf8(b"")
+                string::utf8(URI)
             );
 
         move_to(
@@ -132,7 +133,6 @@ module deri::ptoken {
     public(friend) fun burn(token_id: u256) acquires PToken, CollectionConfig {
         let nft_addr = get_token_address(token_id);
         let nft = object::address_to_object<PToken>(nft_addr);
-        let nft_addr = object::object_address(&nft);
         let owner_address = object::owner(nft);
         let ptoken = move_from<PToken>(nft_addr);
         let PToken { burn_ref } = ptoken;

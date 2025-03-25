@@ -7,8 +7,7 @@ module deri::i256 {
     const OVERFLOW: u64 = 0;
 
     const MIN_AS_U256: u256 = 1 << 255;
-    const MAX_AS_U256: u256 =
-        0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+    const MAX_AS_U256: u256 = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     const LT: u8 = 0;
     const EQ: u8 = 1;
@@ -63,18 +62,16 @@ module deri::i256 {
 
     public fun add(num1: I256, num2: I256): I256 {
         let sum = wrapping_add(num1, num2);
-        let overflow =
-            (sign(num1) & sign(num2) & u8_neg(sign(sum)))
-                + (u8_neg(sign(num1)) & u8_neg(sign(num2)) & sign(sum));
+        let overflow = (sign(num1) & sign(num2) & u8_neg(sign(sum)))
+            + (u8_neg(sign(num1)) & u8_neg(sign(num2)) & sign(sum));
         assert!(overflow == 0, OVERFLOW);
         sum
     }
 
     public fun overflowing_add(num1: I256, num2: I256): (I256, bool) {
         let sum = wrapping_add(num1, num2);
-        let overflow =
-            (sign(num1) & sign(num2) & u8_neg(sign(sum)))
-                + (u8_neg(sign(num1)) & u8_neg(sign(num2)) & sign(sum));
+        let overflow = (sign(num1) & sign(num2) & u8_neg(sign(sum)))
+            + (u8_neg(sign(num1)) & u8_neg(sign(num2)) & sign(sum));
         (sum, overflow != 0)
     }
 
@@ -92,20 +89,22 @@ module deri::i256 {
         let sub_num = wrapping_add(I256 { bits: u256_neg(num2.bits) }, from(1));
         let sum = wrapping_add(num1, sub_num);
         let overflow =
-            (sign(num1) & sign(sub_num) & u8_neg(sign(sum)))
-                + (u8_neg(sign(num1)) & u8_neg(sign(sub_num)) & sign(sum));
+            (sign(num1) & sign(sub_num) & u8_neg(sign(sum))) + (u8_neg(sign(num1)) & u8_neg(sign(sub_num))
+                & sign(sum));
         (sum, overflow != 0)
     }
 
     public fun rescale(num: I256, decimals_s1: u8, decimals_s2: u8): I256 {
-        if (decimals_s1 == decimals_s2) {
-            num
-        } else {
-            neg_from(
-                abs_u256(num) *
-                    (math64::pow(10, (decimals_s2 as u64)) as u256) /
-                    (math64::pow(10, (decimals_s1 as u64)) as u256)
-            )
+        if (decimals_s1 == decimals_s2) { num }
+        else {
+            let scaled =
+                abs_u256(num) * (math64::pow(10, (decimals_s2 as u64)) as u256)
+                    / (math64::pow(10, (decimals_s1 as u64)) as u256);
+            if (is_neg(num)) {
+                neg_from(scaled)
+            } else {
+                from(scaled)
+            }
         }
     }
 
@@ -223,7 +222,7 @@ module deri::i256 {
     public fun and(num1: I256, num2: I256): I256 {
         I256 { bits: (num1.bits & num2.bits) }
     }
-    
+
     public fun to_string(self: I256): String {
         let s = string::utf8(b"");
         if (is_neg(self)) {
@@ -260,8 +259,7 @@ module deri::i256 {
     }
 
     fun u256_neg(v: u256): u256 {
-        v
-            ^ 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+        v ^ 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     }
 
     fun u8_neg(v: u8): u8 {

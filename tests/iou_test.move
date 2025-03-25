@@ -1,7 +1,6 @@
 #[test_only]
 module deri::iou_test {
-
-    use aptos_framework::primary_fungible_store;
+    use supra_framework::primary_fungible_store;
     use deri::iou;
     use deri::test_helpers::setup;
 
@@ -20,6 +19,8 @@ module deri::iou_test {
         let burn_amount = 50;
         iou::burn_for_test(owner_addr, burn_amount);
 
-        assert!(primary_fungible_store::balance(owner_addr, iou_metadata) == (mint_amount - burn_amount));
+        assert!(
+            primary_fungible_store::balance(owner_addr, iou_metadata) == (mint_amount - burn_amount)
+        );
     }
 }

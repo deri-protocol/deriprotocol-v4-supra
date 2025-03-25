@@ -92,18 +92,14 @@ module deri::vault {
         );
         let vault_object = object::object_from_constructor_ref(vault);
 
-        event::emit(
-            VaultCreated { vault: vault_object, asset }
-        );
+        event::emit(VaultCreated { vault: vault_object, asset });
 
         vault_object
     }
 
     /// Deposit assets into the vault associated with a specific 'dtoken'.
     /// Only gateway module can call friend function.
-    public(friend) fun deposit(
-        vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset
-    ): u256 acquires Vault {
+    public(friend) fun deposit(vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset): u256 acquires Vault {
         let minted_ts;
         let asset_decimals = fungible_asset::decimals(fungible_asset::metadata_from_asset(&asset));
         let amount = (fungible_asset::amount(&asset) as u256);
@@ -132,9 +128,7 @@ module deri::vault {
 
     /// Redeem staked tokens and receive assets from the vault associated with a specific 'dToken'
     /// Only gateway module can call friend function.
-    public(friend) fun redeem(
-        vault: Object<Vault>, d_token_id: u256, amount: u256
-    ): FungibleAsset acquires Vault {
+    public(friend) fun redeem(vault: Object<Vault>, d_token_id: u256, amount: u256): FungibleAsset acquires Vault {
         let redeemed_amount;
         let vault_address = object::object_address(&vault);
         let vault = borrow_global_mut<Vault>(object::object_address(&vault));
@@ -148,20 +142,18 @@ module deri::vault {
         let available_amount = amount_total * st_amount / vault.st_total_amount;
         redeemed_amount = if (amount < available_amount) amount else available_amount;
 
-        if (redeemed_amount < available_amount
-            && redeemed_amount * 10000 >= available_amount * 9999) {
+        if (redeemed_amount < available_amount && redeemed_amount * 10000 >= available_amount * 9999) {
             // prevent tiny share left over
             redeemed_amount = available_amount
         };
 
         // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
-        let burned_st = if (redeemed_amount == available_amount) {
-            st_amount
-        } else {
-            safe_math256::div_rounding_up(
-                vault.st_total_amount * redeemed_amount, amount_total
-            )
-        };
+        let burned_st =
+            if (redeemed_amount == available_amount) {
+                st_amount
+            } else {
+                safe_math256::div_rounding_up(vault.st_total_amount * redeemed_amount, amount_total)
+            };
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         let st_amount = *smart_table::borrow_mut(&mut vault.st_amounts, d_token_id);
@@ -186,16 +178,12 @@ module deri::vault {
     }
 
     #[test_only]
-    public fun deposit_for_test(
-        vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset
-    ): u256 acquires Vault {
+    public fun deposit_for_test(vault: Object<Vault>, d_token_id: u256, asset: FungibleAsset): u256 acquires Vault {
         deposit(vault, d_token_id, asset)
     }
 
     #[test_only]
-    public fun redeem_for_test(
-        vault: Object<Vault>, d_token_id: u256, amount: u256
-    ): FungibleAsset acquires Vault {
+    public fun redeem_for_test(vault: Object<Vault>, d_token_id: u256, amount: u256): FungibleAsset acquires Vault {
         redeem(vault, d_token_id, amount)
     }
 }

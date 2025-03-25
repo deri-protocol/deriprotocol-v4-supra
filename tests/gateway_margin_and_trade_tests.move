@@ -1,14 +1,13 @@
 #[test_only]
 module deri::gateway_margin_and_trade_tests {
-    use aptos_framework::event;
-    use aptos_framework::primary_fungible_store;
-    use aptos_std::debug::print;
-    use aptos_std::math64;
+    use supra_framework::event;
+    use supra_framework::primary_fungible_store;
     use deri::gateway::{FinishAddMargin, RequestRemoveMargin, RequestTrade};
     use deri::gateway;
     use deri::test_helpers::{Self, get_b0_metadata, setup};
     use std::signer;
-    use deri::vault;
+    use aptos_std::debug::print;
+    use aptos_std::math64;
     use deri::ptoken::PTokenMinted;
     use deri::i256;
 
@@ -30,32 +29,23 @@ module deri::gateway_margin_and_trade_tests {
         let finish_add_margin_events = event::emitted_events<FinishAddMargin>();
         print(&finish_add_margin_events);
         print(&event::emitted_events<PTokenMinted>());
-        let (
-            request_id,
-            p_token_id,
-            b_token,
-            b_amount
-        ) = gateway::deserialize_finish_add_margin_event(&finish_add_margin_events[0]);
+        let (request_id, p_token_id, b_token, b_amount) =
+            gateway::deserialize_finish_add_margin_event(&finish_add_margin_events[0]);
         gateway::print_d_token_state(p_token_id);
 
         // remove margin
         let remove_margin_amount = 10 * math64::pow(10, 6);
 
-        gateway::request_remove_margin(
-            user,
-            p_token_id,
-            b0_metadata,
-            remove_margin_amount as u256,
-        );
+        gateway::request_remove_margin(user, p_token_id, b0_metadata, remove_margin_amount as u256);
         let finish_remove_margin_events = event::emitted_events<RequestRemoveMargin>();
         print(&finish_remove_margin_events);
 
         let (
-           request_id,
-           p_token_id,
-           real_money_margin,
-           last_cumulative_pnl_on_engine,
-           cumulative_pnl_on_gateway,
+            request_id,
+            p_token_id,
+            real_money_margin,
+            last_cumulative_pnl_on_engine,
+            cumulative_pnl_on_gateway,
             b_amount_to_remove
         ) = gateway::deserialize_request_remove_margin_event(&finish_remove_margin_events[0]);
 
@@ -65,7 +55,7 @@ module deri::gateway_margin_and_trade_tests {
             p_token_id,
             0,
             i256::from_uncheck(i256::string_to_u256(last_cumulative_pnl_on_engine)),
-            b_amount_to_remove,
+            b_amount_to_remove
         );
 
         gateway::print_d_token_state(p_token_id);
@@ -86,29 +76,14 @@ module deri::gateway_margin_and_trade_tests {
 
         let finish_add_margin_events = event::emitted_events<FinishAddMargin>();
         print(&finish_add_margin_events);
-        let (
-            request_id,
-            p_token_id,
-            b_token,
-            b_amount
-        ) = gateway::deserialize_finish_add_margin_event(&finish_add_margin_events[0]);
+        let (request_id, p_token_id, b_token, b_amount) =
+            gateway::deserialize_finish_add_margin_event(&finish_add_margin_events[0]);
         gateway::print_d_token_state(p_token_id);
 
-        gateway::request_trade(
-            user,
-            p_token_id,
-            b"ETH",
-            vector[1,2]
-        );
+        gateway::request_trade(user, p_token_id, b"ETH", vector[1, 2]);
         print(&event::emitted_events<RequestTrade>());
         gateway::print_d_token_state(p_token_id);
 
-        gateway::request_trade(
-            user,
-            p_token_id,
-            b"BTC",
-            vector[1,2]
-        );
+        gateway::request_trade(user, p_token_id, b"BTC", vector[1, 2]);
     }
-
 }

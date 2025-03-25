@@ -1,7 +1,7 @@
 #[test_only]
 module deri::d_token_test {
-    use aptos_framework::event;
-    use aptos_framework::object;
+    use supra_framework::event;
+    use supra_framework::object;
     use deri::ptoken::{Self, PTokenMinted};
     use deri::test_helpers::setup;
 

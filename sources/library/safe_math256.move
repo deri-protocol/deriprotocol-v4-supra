@@ -10,9 +10,8 @@ module deri::safe_math256 {
     }
 
     public fun rescale(value: u256, decimals_s1: u8, decimals_s2: u8): u256 {
-        if (decimals_s1 == decimals_s2) {
-            value
-        } else {
+        if (decimals_s1 == decimals_s2) { value }
+        else {
             value * (math64::pow(10, (decimals_s2 as u64)) as u256) / (math64::pow(10, (decimals_s1 as u64)) as u256)
         }
     }

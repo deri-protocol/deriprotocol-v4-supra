@@ -2,14 +2,7 @@ module deri::coin_wrapper {
     use supra_framework::account::{Self, SignerCapability};
     use supra_framework::supra_account;
     use supra_framework::coin::{Self, Coin};
-    use supra_framework::fungible_asset::{
-        Self,
-        BurnRef,
-        FungibleAsset,
-        Metadata,
-        MintRef,
-        TransferRef
-    };
+    use supra_framework::fungible_asset::{Self, BurnRef, FungibleAsset, Metadata, MintRef, TransferRef};
     use supra_framework::object::{Self, Object};
     use supra_framework::primary_fungible_store;
     use aptos_std::smart_table::{Self, SmartTable};
@@ -121,8 +114,7 @@ module deri::coin_wrapper {
         let wrapper_account = mut_wrapper_account();
         let coin_to_fungible_asset = &mut wrapper_account.coin_to_fungible_asset;
         if (!smart_table::contains(coin_to_fungible_asset, coin_type)) {
-            let metadata_constructor_ref =
-                &object::create_named_object(wrapper_signer, *string::bytes(&coin_type));
+            let metadata_constructor_ref = &object::create_named_object(wrapper_signer, *string::bytes(&coin_type));
             primary_fungible_store::create_primary_store_enabled_fungible_asset(
                 metadata_constructor_ref,
                 // Coin doesn't have maximum supply.
@@ -141,7 +133,11 @@ module deri::coin_wrapper {
             let transfer_ref = fungible_asset::generate_transfer_ref(metadata_constructor_ref);
             let metadata = object::object_from_constructor_ref<Metadata>(metadata_constructor_ref);
 
-            smart_table::add(coin_to_fungible_asset, coin_type, FungibleAssetData { metadata, mint_ref, transfer_ref, burn_ref });
+            smart_table::add(
+                coin_to_fungible_asset,
+                coin_type,
+                FungibleAssetData { metadata, mint_ref, transfer_ref, burn_ref }
+            );
             smart_table::add(&mut wrapper_account.fungible_asset_to_coin, metadata, coin_type);
         };
         smart_table::borrow(coin_to_fungible_asset, coin_type).metadata

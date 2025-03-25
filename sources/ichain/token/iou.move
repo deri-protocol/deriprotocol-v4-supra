@@ -27,8 +27,7 @@ module deri::iou {
     }
 
     fun init_module(deployer: &signer) {
-        let constructor_ref =
-            &object::create_named_object(deployer, ASSET_SYMBOL);
+        let constructor_ref = &object::create_named_object(deployer, ASSET_SYMBOL);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             constructor_ref,
             option::none(),

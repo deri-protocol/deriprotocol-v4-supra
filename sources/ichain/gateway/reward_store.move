@@ -64,33 +64,31 @@ module deri::reward_store {
         fungible_asset::transfer(
             store_signer,
             reward_store.store,
-            primary_fungible_store::ensure_primary_store_exists(recipient, object::address_to_object<Metadata>(@b0_token)),
+            primary_fungible_store::ensure_primary_store_exists(
+                recipient, object::address_to_object<Metadata>(@b0_token)
+            ),
             reward
         );
 
-        event::emit(ClaimReward {
-            user_address,
-            recipient,
-            reward_amount: reward
-        });
+        event::emit(ClaimReward { user_address, recipient, reward_amount: reward });
     }
 
     /// Deposits a reward into the user's balance.
     public(friend) fun deposit_reward(user_address: vector<u8>, reward_amount: u64) acquires RewardStore {
         let reward_store = borrow_global_mut<RewardStore>(@deri);
 
-        let current_reward_amount = if (!smart_table::contains(&reward_store.reward, user_address)) {
-            smart_table::add(&mut reward_store.reward, user_address, 0);
-            0
-        } else {
-           *smart_table::borrow(&reward_store.reward, user_address)
-        };
+        let current_reward_amount =
+            if (!smart_table::contains(&reward_store.reward, user_address)) {
+                smart_table::add(&mut reward_store.reward, user_address, 0);
+                0
+            } else {
+                *smart_table::borrow(&reward_store.reward, user_address)
+            };
 
         smart_table::upsert(&mut reward_store.reward, user_address, current_reward_amount + reward_amount);
 
-        event::emit(DepositReward {
-            user_address,
-            total_reward_amount: current_reward_amount + reward_amount
-        });
+        event::emit(
+            DepositReward { user_address, total_reward_amount: current_reward_amount + reward_amount }
+        );
     }
 }

@@ -1,13 +1,13 @@
 #[test_only]
 module deri::gateway_liquidity_tests {
-    use aptos_framework::event;
-    use aptos_framework::primary_fungible_store;
-    use aptos_std::debug::print;
-    use aptos_std::math64;
-    use deri::gateway::RequestUpdateLiquidty;
+    use supra_framework::event;
+    use supra_framework::primary_fungible_store;
     use deri::gateway;
     use deri::test_helpers::{Self, get_b0_metadata, setup};
     use std::signer;
+    use aptos_std::debug::print;
+    use aptos_std::math64;
+    use deri::gateway::RequestUpdateLiquidity;
     use deri::i256;
 
     #[test(user = @0xbabe1, user2 = @0xbabe2)]
@@ -28,15 +28,10 @@ module deri::gateway_liquidity_tests {
         gateway::request_add_liquidity(user, 0, b0_metadata, (add_liquidity_amount as u256));
         gateway::request_add_liquidity(user2, 0, b0_metadata, (add_liquidity_amount as u256));
 
-        let events = event::emitted_events<RequestUpdateLiquidty>();
+        let events = event::emitted_events<RequestUpdateLiquidity>();
         print(&events);
         let (
-            request_id,
-            l_token_id,
-            liquidity,
-            last_cumulative_pnl_on_engine,
-            cumulative_pnl_on_gateway,
-            remove_b_amount,
+            request_id, l_token_id, liquidity, last_cumulative_pnl_on_engine, cumulative_pnl_on_gateway, remove_b_amount
         ) = gateway::deserialize_request_update_liquidity_event(&events[0]);
 
         gateway::print_d_token_state(l_token_id);
@@ -48,8 +43,8 @@ module deri::gateway_liquidity_tests {
             l_token_id,
             liquidity,
             i256::string_to_u256(last_cumulative_pnl_on_engine),
-             i256::from_uncheck(i256::string_to_u256(cumulative_pnl_on_gateway)),
-            remove_b_amount,
+            i256::from_uncheck(i256::string_to_u256(cumulative_pnl_on_gateway)),
+            remove_b_amount
         );
         gateway::print_d_token_state(l_token_id);
 
@@ -57,15 +52,10 @@ module deri::gateway_liquidity_tests {
         gateway::request_remove_liquidity(user, l_token_id, b0_metadata, (add_liquidity_amount as u256));
         gateway::print_d_token_state(l_token_id);
 
-        let events = event::emitted_events<RequestUpdateLiquidty>();
+        let events = event::emitted_events<RequestUpdateLiquidity>();
         print(&events);
         let (
-            request_id,
-            l_token_id,
-            liquidity,
-            last_cumulative_pnl_on_engine,
-            cumulative_pnl_on_gateway,
-            remove_b_amount,
+            request_id, l_token_id, liquidity, last_cumulative_pnl_on_engine, cumulative_pnl_on_gateway, remove_b_amount
         ) = gateway::deserialize_request_update_liquidity_event(&events[2]);
 
         gateway::test_finish_update_liquidity(
@@ -75,7 +65,7 @@ module deri::gateway_liquidity_tests {
             liquidity,
             i256::string_to_u256(last_cumulative_pnl_on_engine),
             i256::from_uncheck(i256::string_to_u256(cumulative_pnl_on_gateway)),
-            remove_b_amount,
+            remove_b_amount
         );
         print(&primary_fungible_store::balance(user_addr, b0_metadata));
         assert!(primary_fungible_store::balance(user_addr, b0_metadata) == user_b0_total_amount);

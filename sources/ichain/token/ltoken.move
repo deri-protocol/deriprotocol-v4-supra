@@ -10,7 +10,6 @@ module deri::ltoken {
     use supra_framework::object::{Self, ExtendRef, Object};
     use aptos_token_objects::collection::{Self, MutatorRef};
     use aptos_token_objects::token::{Self, BurnRef};
-    use deri::global_state;
     use std::bcs;
     use std::option;
     use std::signer;
@@ -54,8 +53,7 @@ module deri::ltoken {
 
     fun init_module(deployer: &signer) {
         // Create an unlimited NFT collection with no royalty
-        let creator =
-            &object::create_named_object(&global_state::config_signer(), LTOKEN_COLLECTION_NAME);
+        let creator = &object::create_named_object(deployer, LTOKEN_COLLECTION_NAME);
         let collection =
             &collection::create_unlimited_collection(
                 &object::generate_signer(creator),
@@ -79,14 +77,16 @@ module deri::ltoken {
     #[view]
     public fun collection_address(): address acquires CollectionConfig {
         let creator_addr = signer::address_of(creator_signer());
-        collection::create_collection_address(
-            &creator_addr, &string::utf8(LTOKEN_COLLECTION_NAME)
-        )
+        collection::create_collection_address(&creator_addr, &string::utf8(LTOKEN_COLLECTION_NAME))
     }
 
     #[view]
     public fun get_token_address(token_id: u256): address acquires CollectionConfig {
-        let seed = token::create_token_seed(&string::utf8(LTOKEN_COLLECTION_NAME), &string::utf8(bcs::to_bytes(&token_id)));
+        let seed =
+            token::create_token_seed(
+                &string::utf8(LTOKEN_COLLECTION_NAME),
+                &string::utf8(bcs::to_bytes(&token_id))
+            );
         let signer_addr = signer::address_of(creator_signer());
         object::create_object_address(&signer_addr, seed)
     }
@@ -111,10 +111,10 @@ module deri::ltoken {
             &token::create_named_token(
                 &object::generate_signer_for_extending(&collection_config.creator),
                 string::utf8(LTOKEN_COLLECTION_NAME),
-                string::utf8(b""),
+                string::utf8(LTOKEN_COLLECTION_DESC),
                 string::utf8(bcs::to_bytes(&(collection_config.base_token_id + collection_config.total_minted))),
                 option::none(),
-                string::utf8(b"")
+                string::utf8(URI)
             );
 
         move_to(

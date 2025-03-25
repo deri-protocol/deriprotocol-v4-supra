@@ -1,4 +1,6 @@
 module deri::global_state {
+    use std::option;
+    use std::option::Option;
     use supra_framework::object::{Self, ExtendRef};
     use std::signer;
 
@@ -18,7 +20,7 @@ module deri::global_state {
     struct GlobalState has key {
         extend_ref: ExtendRef,
         admin: address,
-        pending_admin: address
+        pending_admin: Option<address>
     }
 
     fun init_module(deployer: &signer) {
@@ -28,7 +30,7 @@ module deri::global_state {
             GlobalState {
                 extend_ref: object::generate_extend_ref(global_state),
                 admin: @admin,
-                pending_admin: @0x0
+                pending_admin: option::none()
             }
         );
     }
@@ -44,15 +46,16 @@ module deri::global_state {
 
     public entry fun transfer_admin(admin: &signer, new_admin: address) acquires GlobalState {
         assert_is_admin(admin);
-        let global_config =borrow_global_mut<GlobalState>(@deri);
-        global_config.pending_admin = new_admin;
+        let global_config = borrow_global_mut<GlobalState>(@deri);
+        global_config.pending_admin = option::some(new_admin)
     }
 
     public entry fun accept_admin(new_admin: &signer) acquires GlobalState {
-        let global_config =borrow_global_mut<GlobalState>(@deri);
-        assert!(signer::address_of(new_admin) == global_config.pending_admin, ENOT_AUTHORIZED);
-        global_config.admin = global_config.pending_admin;
-        global_config.pending_admin = @0x0;
+        let global_config = borrow_global_mut<GlobalState>(@deri);
+        let current_pending_admin = option::extract(&mut global_config.pending_admin);
+        assert!(signer::address_of(new_admin) == current_pending_admin, ENOT_AUTHORIZED);
+        global_config.admin = current_pending_admin;
+        global_config.pending_admin = option::none();
     }
 
     public fun assert_is_admin(admin: &signer) acquires GlobalState {
