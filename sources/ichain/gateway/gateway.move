@@ -922,6 +922,13 @@ module deri::gateway {
 
         let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
         d_token_state.b0_amount = i256::wrapping_add(d_token_state.b0_amount, i256::from(b0_amount));
+
+        let gateway_state = &mut gateway_storage.gateway_state;
+        let request_id = increment_request_id(gateway_state, d_token_state);
+
+        event::emit(
+            FinishAddMargin { request_id, p_token_id, b_token: object::object_address(&token_b0), b_amount: b0_amount }
+        );
     }
 
     /// Request to remove margin with specified base token.
