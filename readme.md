@@ -6,27 +6,10 @@ First you need calculate the contract address and deploy the contract code to th
 
 ### 1. Calculate the contract address
 
-- Get sequence number
+- Get object contract address
 
 ```shell
-supra move tool view --function-id '0x1::account::get_sequence_number' --args address:0xa466c7f3ae080d3570de98fb5c37fa0e40242d0aa221da4fc386a58da44b2b78 --url https://rpc-testnet.supra.com
-```
-
-```rust
-    #[test]
-    fun get_object_address() {
-        let owner_addr = ${owner_addr};
-        let addr = object::create_object_address(&owner_addr, object_seed(owner_addr));
-        print(&addr);
-    }
-
-    fun object_seed(publisher: address): vector<u8> {
-        let sequence_number = ${current_sequence_number} + 1;
-        let seeds = vector[];
-        seeds.append(bcs::to_bytes(&b"supra_framework::object_code_deployment"));
-        seeds.append(bcs::to_bytes(&sequence_number));
-        seeds
-    }
+supra move tool view --function-id '0xe02e347d3461d4fe0366243642baf6e5ead39cb751650fa3f94f4d23ae5a2186::object_deployment::get_object_address' --args address:0xa466c7f3ae080d3570de98fb5c37fa0e40242d0aa221da4fc386a58da44b2b78 --url https://rpc-testnet.supra.com --profile deri1
 ```
 
 ### 2. Build publish payload
