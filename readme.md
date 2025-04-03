@@ -57,10 +57,10 @@ supra move tool run --function-id '<contract_address>::gateway::initialize' --ur
 
 ### 2. Add b token (USDC)
 
-- Get vault address:
+- Create vault:
 
 ```shell
-supra move tool view --function-id '<contract_address>::vault::vault_address' --args address:<usdc_address> --url https://rpc-testnet.supra.com
+supra move tool run --function-id '<contract_address>::gateway::create_vault' --args address:<usdc_address> --url https://rpc-testnet.supra.com --profile deri1
 ```
 
 - Add b token

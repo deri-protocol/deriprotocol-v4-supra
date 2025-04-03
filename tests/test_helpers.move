@@ -18,8 +18,8 @@ module deri::test_helpers {
     use std::option;
     use std::signer;
     use std::string;
-    use supra_framework::chain_id;
     use deri::vault;
+    use supra_framework::chain_id;
 
     struct TestCoin<phantom R> has key {
         mint_cap: MintCapability<R>
@@ -54,7 +54,8 @@ module deri::test_helpers {
         coin::destroy_mint_cap(mint_cap);
 
         // add _token is b0
-        let vault_b0_addr = vault::vault_address(b0_metadata);
+        let vault_b0 = vault::create_vault(b0_metadata);
+        let vault_b0_addr = object::object_address(&vault_b0);
         gateway::add_b_token(
             admin,
             b0_metadata,

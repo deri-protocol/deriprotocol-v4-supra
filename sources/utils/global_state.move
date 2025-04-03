@@ -5,7 +5,6 @@ module deri::global_state {
     use std::signer;
 
     friend deri::coin_wrapper;
-    friend deri::vault;
 
     const GLOBAL_STATE_NAME: vector<u8> = b"deri::global_state";
 

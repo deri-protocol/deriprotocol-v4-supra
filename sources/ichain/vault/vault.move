@@ -36,11 +36,6 @@ module deri::vault {
     }
 
     #[view]
-    public fun vault_address(asset: Object<Metadata>): address {
-        object::create_object_address(&global_state::config_address(), bcs::to_bytes(&asset))
-    }
-
-    #[view]
     public fun get_balance(vault: Object<Vault>, d_token_id: u256): u256 acquires Vault {
         let vault_address = object::object_address(&vault);
         let vault = vault_data(vault);
@@ -78,7 +73,7 @@ module deri::vault {
     /// Create a new vault with the given asset.
     /// Only gateway module can call friend function.
     public(friend) fun create_vault(asset: Object<Metadata>): Object<Vault> {
-        let vault = &object::create_named_object(&global_state::config_signer(), bcs::to_bytes(&asset));
+        let vault = &object::create_object(global_state::config_address());
         let vault_signer = object::generate_signer(vault);
         move_to(
             &vault_signer,
