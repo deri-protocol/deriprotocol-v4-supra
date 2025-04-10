@@ -51,9 +51,9 @@ module deri::ptoken {
         from: address
     }
 
-    fun init_module(deployer: &signer) {
+    fun init_module(deri_signer: &signer) {
         // Create an unlimited NFT collection with no royalty
-        let creator = &object::create_named_object(deployer, PTOKEN_COLLECTION_NAME);
+        let creator = &object::create_named_object(deri_signer, PTOKEN_COLLECTION_NAME);
         let collection =
             &collection::create_unlimited_collection(
                 &object::generate_signer(creator),
@@ -63,7 +63,7 @@ module deri::ptoken {
                 string::utf8(URI)
             );
         move_to(
-            deployer,
+            deri_signer,
             CollectionConfig {
                 creator: object::generate_extend_ref(creator),
                 mutator_ref: collection::generate_mutator_ref(collection),

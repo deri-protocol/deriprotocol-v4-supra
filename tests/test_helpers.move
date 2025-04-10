@@ -47,14 +47,14 @@ module deri::test_helpers {
         ltoken::init_for_test(deployer);
         ptoken::init_for_test(deployer);
         gateway::init_for_test(deployer, b0_metadata);
-        gateway::initialize(admin);
+        gateway::initialize_with_fa(admin, b0_metadata);
 
         timestamp::set_time_has_started_for_testing(&account::create_signer_for_test(@0x1));
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
 
         // add _token is b0
-        let vault_b0 = vault::create_vault(b0_metadata);
+        let vault_b0 = vault::create_vault_for_test(b0_metadata);
         let vault_b0_addr = object::object_address(&vault_b0);
         gateway::add_b_token(
             admin,

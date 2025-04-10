@@ -50,9 +50,10 @@ supra move tool run --json-file /supra/configs/deri-contracts/contract.json --ur
 # Setup deri gateway
 
 ### 1. Initialize the gateway
+example: USC address: 0x7d2b35ed9abb99b7dc2afa97403c4bc1c98c16342b33ffcc416ccb5f133b3b9f::usdc_coin::USDC
 
 ```shell
-supra move tool run --function-id '<contract_address>::gateway::initialize' --url https://rpc-testnet.supra.com --profile deri1
+supra move tool run --function-id '<contract_address>::gateway::initialize_with_coin' --type-args '<USC address>' --url https://rpc-testnet.supra.com --profile deri1
 ```
 
 ### 2. Add b token (USDC)
@@ -60,13 +61,13 @@ supra move tool run --function-id '<contract_address>::gateway::initialize' --ur
 - Create vault:
 
 ```shell
-supra move tool run --function-id '<contract_address>::gateway::create_vault' --args address:<usdc_address> --url https://rpc-testnet.supra.com --profile deri1
+supra move tool run --function-id '<contract_address>::gateway::create_create_vault_coin' --type-args '<USC address>' --url https://rpc-testnet.supra.com --profile deri1
 ```
 
 - Add b token
 
 ```shell
-supra move tool run --function-id '<contract_address>::gateway::add_b_token' --args address:<usdc_address> address:<usdc_vault_address> String:USDCUSD u256:1000000000000000000 --url https://rpc-testnet.supra.com --profile deri1
+supra move tool run --function-id '<contract_address>::gateway::add_b_token_coin' --type-args '<USC address>' --args address:<usdc_vault_address> String:USDCUSD u256:1000000000000000000 --url https://rpc-testnet.supra.com --profile deri1
 ```
 
 ### 3. Set d_chain execution fee per request
@@ -84,5 +85,6 @@ supra move tool run --function-id '<contract_address>::gateway::set_execution_fe
 # How to faucet USDC testnet on Supra
 
 ```shell
-supra move tool run --function-id '0x7d2b35ed9abb99b7dc2afa97403c4bc1c98c16342b33ffcc416ccb5f133b3b9f::usdc::faucet' --args u64:1000000000 --url https://rpc-testnet.supra.com --profile deri1
+supra move tool run --function-id '0x7d2b35ed9abb99b7dc2afa97403c4bc1c98c16342b33ffcc416ccb5f133b3b9f::usdc_coin::mint' --args u64:1000000000 --url https://rpc-testnet.supra.com --profile deri1
+
 ```

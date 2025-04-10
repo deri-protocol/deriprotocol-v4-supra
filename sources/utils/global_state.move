@@ -5,6 +5,7 @@ module deri::global_state {
     use std::signer;
 
     friend deri::coin_wrapper;
+    friend deri::reward_store;
 
     const GLOBAL_STATE_NAME: vector<u8> = b"deri::global_state";
 
@@ -18,10 +19,10 @@ module deri::global_state {
         pending_admin: Option<address>
     }
 
-    fun init_module(deployer: &signer) {
-        let global_state = &object::create_named_object(deployer, GLOBAL_STATE_NAME);
+    fun init_module(deri_signer: &signer) {
+        let global_state = &object::create_named_object(deri_signer, GLOBAL_STATE_NAME);
         move_to(
-            deployer,
+            deri_signer,
             GlobalState {
                 extend_ref: object::generate_extend_ref(global_state),
                 admin: @admin,

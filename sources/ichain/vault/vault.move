@@ -6,7 +6,6 @@ module deri::vault {
     use aptos_std::smart_table::{Self, SmartTable};
     use deri::global_state;
     use deri::safe_math256;
-    use std::bcs;
 
     friend deri::gateway;
 

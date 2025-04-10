@@ -331,11 +331,9 @@ module deri::gateway {
         amount: u256
     }
 
-    fun init_module(deployer: &signer) {
+    fun init_module(deri_signer: &signer) {
         // create wrap APT
         coin_wrapper::create_fungible_asset<SupraCoin>();
-
-        let token_b0 = object::address_to_object<Metadata>(@b0_token);
 
         let gateway_storage = GatewayStorage {
             gateway_state: GatewayState {
@@ -360,7 +358,6 @@ module deri::gateway {
         };
 
         let gateway_stores = smart_table::new();
-        smart_table::add(&mut gateway_stores, token_b0, create_gateway_store(token_b0));
         smart_table::add(
             &mut gateway_stores,
             get_aptos_coin_wrapper(),
@@ -368,10 +365,11 @@ module deri::gateway {
         );
 
         move_to(
-            deployer,
+            deri_signer,
             GatewayParam {
                 vault0: ZERO_ADDRESS,
-                token_b0,
+                // B0, settlement base token, e.g. USDC native, setup in initialize step
+                token_b0: get_aptos_coin_wrapper(),
                 d_chain_event_signer: D_CHAIN_EVENT_SIGNER,
                 b0_reserve_ratio: B0_RESERVE_RATIO,
                 liquidation_reward_cut_ratio: i256::from(LIQUIDATION_REWARD_CUT_RATIO),
@@ -383,21 +381,38 @@ module deri::gateway {
             }
         );
 
-        move_to(deployer, gateway_storage);
+        move_to(deri_signer, gateway_storage);
     }
 
     /// Issue: https://github.com/aptos-labs/aptos-core/issues/11038
     /// so can not create vault in init_module
-    public entry fun initialize(admin: &signer) acquires GatewayParam {
+    public entry fun initialize_with_fa(admin: &signer, token_b0: Object<Metadata>) acquires GatewayParam {
+        initialize_internal(admin, token_b0)
+    }
+
+    public entry fun initialize_with_coin<T>(admin: &signer) acquires GatewayParam {
+        let token_b0 = coin_wrapper::create_fungible_asset<T>();
+        initialize_internal(admin, token_b0)
+    }
+
+    fun initialize_internal(admin: &signer, token_b0: Object<Metadata>) acquires GatewayParam {
         global_state::assert_is_admin(admin);
+
         let gateway_param = borrow_global_mut<GatewayParam>(@deri);
+        let gateway_stores = &mut gateway_param.gateway_stores;
+
+        smart_table::add(gateway_stores, token_b0, create_gateway_store(token_b0));
 
         // create vault0 for token_b0
-        let vault = vault::create_vault(gateway_param.token_b0);
+        let vault = vault::create_vault(token_b0);
         let vault_addr = object::object_address(&vault);
 
         // update vault0 in GatewayParam
         gateway_param.vault0 = vault_addr;
+        gateway_param.token_b0 = token_b0;
+
+        // create reward store for token_b0
+        reward_store::create_reward_store(token_b0)
     }
 
     #[view]
@@ -535,7 +550,34 @@ module deri::gateway {
         vault::create_vault(vault_asset);
     }
 
+    public entry fun create_vault_coin<T>(admin: &signer) {
+        let vault_asset = coin_wrapper::create_fungible_asset<T>();
+
+        global_state::assert_is_admin(admin);
+        vault::create_vault(vault_asset);
+    }
+
     public entry fun add_b_token(
+        admin: &signer,
+        b_token: Object<Metadata>,
+        vault_address: address,
+        oracle_id: String,
+        collateral_factor: u256
+    ) acquires GatewayStorage, GatewayParam {
+        add_b_token_internal(admin, b_token, vault_address, oracle_id, collateral_factor)
+    }
+
+    public entry fun add_b_token_coin<T>(
+        admin: &signer,
+        vault_address: address,
+        oracle_id: String,
+        collateral_factor: u256
+    ) acquires GatewayStorage, GatewayParam {
+        let b_token = coin_wrapper::create_fungible_asset<T>();
+        add_b_token_internal(admin, b_token, vault_address, oracle_id, collateral_factor)
+    }
+
+    fun add_b_token_internal(
         admin: &signer,
         b_token: Object<Metadata>,
         vault_address: address,
@@ -567,6 +609,17 @@ module deri::gateway {
     }
 
     public entry fun del_b_token(admin: &signer, b_token: Object<Metadata>) acquires GatewayStorage {
+        del_b_token_internal(admin, b_token)
+    }
+
+    public entry fun del_b_token_coin<T>(admin: &signer) acquires GatewayStorage {
+        let b_token = coin_wrapper::get_wrapper<T>();
+
+        del_b_token_internal(admin, b_token)
+    }
+
+
+    fun del_b_token_internal(admin: &signer, b_token: Object<Metadata>) acquires GatewayStorage {
         global_state::assert_is_admin(admin);
 
         let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
@@ -584,6 +637,28 @@ module deri::gateway {
 
     /// This function can be used to change bToken collateral factor
     public entry fun set_b_token_parameter(
+            admin: &signer,
+            b_token: Object<Metadata>,
+            vault_address: address,
+            oracle_id: String,
+            collateral_factor: u256
+    ) acquires GatewayStorage {
+        set_b_token_parameter_internal(admin, b_token, vault_address, oracle_id, collateral_factor)
+    }
+
+    public entry fun set_b_token_parameter_coin<T>(
+        admin: &signer,
+        vault_address: address,
+        oracle_id: String,
+        collateral_factor: u256
+    ) acquires GatewayStorage {
+        let b_token = coin_wrapper::get_wrapper<T>();
+
+        set_b_token_parameter_internal(admin, b_token, vault_address, oracle_id, collateral_factor)
+    }
+
+
+    fun set_b_token_parameter_internal(
         admin: &signer,
         b_token: Object<Metadata>,
         vault_address: address,
@@ -712,6 +787,26 @@ module deri::gateway {
     public entry fun finish_collect_protocol_fee(
         admin: &signer, event_data: vector<u8>, signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
+        let b0_asset = finish_collect_protocol_fee_internal(admin, event_data, signature);
+
+        let gateway_param = borrow_global<GatewayParam>(@deri);
+        primary_fungible_store::deposit(gateway_param.protocol_fee_manager, b0_asset);
+    }
+
+    public entry fun finish_collect_protocol_fee_coin<T>(
+        admin: &signer, event_data: vector<u8>, signature: vector<u8>
+    ) acquires GatewayStorage, GatewayParam {
+        let b0_asset = finish_collect_protocol_fee_internal(admin, event_data, signature);
+
+        let gateway_param = borrow_global<GatewayParam>(@deri);
+        let b0_coin = coin_wrapper::unwrap<T>(b0_asset);
+
+        supra_account::deposit_coins(gateway_param.protocol_fee_manager, b0_coin)
+    }
+
+    fun finish_collect_protocol_fee_internal(
+        admin: &signer, event_data: vector<u8>, signature: vector<u8>
+    ): FungibleAsset acquires GatewayStorage, GatewayParam {
         global_state::assert_is_admin(admin);
 
         let chain_id = vector_to_u256(extract_event_data(event_data, 0));
@@ -724,6 +819,7 @@ module deri::gateway {
             ENOT_AUTHORIZED
         );
         let gateway_state = &mut gateway_storage.gateway_state;
+        let fa_return = fungible_asset::zero(gateway_param.token_b0);
 
         assert!(chain_id == (chain_id::get() as u256), EINVALID_CHAIN_ID);
         let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
@@ -740,14 +836,17 @@ module deri::gateway {
                 let b0_asset = vault::redeem(vault0, 0, amount);
                 amount = (fungible_asset::amount(&b0_asset) as u256);
 
-                primary_fungible_store::deposit(gateway_param.protocol_fee_manager, b0_asset);
                 cumulative_collected_protocol_fee_on_gateway = cumulative_collected_protocol_fee_on_gateway
                     + safe_math256::rescale(amount, decimals_b0, SCALE_DECIMALS);
                 gateway_state.cumulative_collected_protocol_fee = cumulative_collected_protocol_fee_on_gateway;
 
-                event::emit(FinishCollectProtocolFee { amount })
+                event::emit(FinishCollectProtocolFee { amount });
+
+                fungible_asset::merge(&mut fa_return, b0_asset);
             }
-        }
+        };
+
+        fa_return
     }
 
     /// Request to add liquidity with specified base token.
@@ -757,9 +856,33 @@ module deri::gateway {
         b_token: Object<Metadata>,
         b_amount: u256
     ) acquires GatewayStorage, GatewayParam {
+        let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
+
+        request_add_liquidity_internal(user, l_token_id, b_token_asset)
+    }
+
+    public entry fun request_add_liquidity_coin<T>(
+        user: &signer,
+        l_token_id: u256,
+        b_amount: u256
+    ) acquires GatewayStorage, GatewayParam {
+        let b_coin = coin::withdraw<T>(user, (b_amount as u64));
+        let b_token_asset = coin_wrapper::wrap(b_coin);
+
+        request_add_liquidity_internal(user, l_token_id, b_token_asset)
+    }
+
+
+    fun request_add_liquidity_internal(
+        user: &signer,
+        l_token_id: u256,
+        b_asset: FungibleAsset
+    ) acquires GatewayStorage, GatewayParam {
         let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
         let gateway_param = borrow_global<GatewayParam>(@deri);
         let user_address = signer::address_of(user);
+        let b_token = fungible_asset::metadata_from_asset(&b_asset);
+        let b_amount = (fungible_asset::amount(&b_asset) as u256);
         let b_token_address = object::object_address(&b_token);
         if (l_token_id == 0) {
             l_token_id = ltoken::mint(user_address);
@@ -806,10 +929,7 @@ module deri::gateway {
             );
         assert!(b_amount != 0, EINVALID_BTOKEN_AMOUNT);
 
-        if (get_aptos_coin_wrapper() != b_token) {
-            let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
-            deposit(&mut data, b_token_asset, gateway_param);
-        };
+        deposit(&mut data, b_asset, gateway_param);
         get_ex_params(&mut data, b_token_state, gateway_param);
 
         let new_liquidity = get_d_token_liquidity(&data, gateway_param);
@@ -830,6 +950,25 @@ module deri::gateway {
 
     /// Request to remove liquidity with specified base token.
     public entry fun request_remove_liquidity(
+        user: &signer,
+        l_token_id: u256,
+        b_token: Object<Metadata>,
+        b_amount: u256
+    ) acquires GatewayStorage, GatewayParam {
+        request_remove_liquidity_internal(user, l_token_id, b_token, b_amount);
+    }
+
+    public entry fun request_remove_liquidity_coin<T>(
+        user: &signer,
+        l_token_id: u256,
+        b_amount: u256
+    ) acquires GatewayStorage, GatewayParam {
+        let b_token = coin_wrapper::get_wrapper<T>();
+
+        request_remove_liquidity_internal(user, l_token_id, b_token, b_amount);
+    }
+
+    fun request_remove_liquidity_internal(
         user: &signer,
         l_token_id: u256,
         b_token: Object<Metadata>,
@@ -898,7 +1037,7 @@ module deri::gateway {
         )
     }
 
-    // Request to add margin with specified base token.
+    /// Request to add margin with specified base token.
     public entry fun request_add_margin(
         user: &signer,
         p_token_id: u256,
@@ -906,18 +1045,46 @@ module deri::gateway {
         b_amount: u256,
         single_position: bool
     ) acquires GatewayStorage, GatewayParam {
-        request_add_margin_internal(user, p_token_id, b_token, b_amount, single_position);
+        let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
+
+        request_add_margin_internal(user, p_token_id, b_token_asset, single_position);
+    }
+
+    public entry fun request_add_margin_coin<T>(
+        user: &signer,
+        p_token_id: u256,
+        b_amount: u256,
+        single_position: bool
+    ) acquires GatewayStorage, GatewayParam {
+        let b_token_coin = coin::withdraw<T>(user, (b_amount as u64));
+
+        request_add_margin_internal(user, p_token_id, coin_wrapper::wrap(b_token_coin), single_position);
     }
 
     public entry fun request_add_margin_b0(user: &signer, p_token_id: u256, b0_amount: u256) acquires GatewayParam, GatewayStorage {
+        let gateway_param = borrow_global<GatewayParam>(@deri);
+        let token_b0 = gateway_param.token_b0;
+        let b0_asset = primary_fungible_store::withdraw(user, token_b0, (b0_amount as u64));
+
+        request_add_margin_b0_internal(user, p_token_id, b0_asset);
+    }
+
+    public entry fun request_add_margin_b0_coin<T>(user: &signer, p_token_id: u256, b0_amount: u256) acquires GatewayParam, GatewayStorage {
+        let b0_coin = coin::withdraw<T>(user, (b0_amount as u64));
+        let b0_asset = coin_wrapper::wrap(b0_coin);
+
+        request_add_margin_b0_internal(user, p_token_id, b0_asset);
+    }
+
+    fun request_add_margin_b0_internal(user: &signer, p_token_id: u256, b0_asset: FungibleAsset) acquires GatewayParam, GatewayStorage {
         let user_addr = signer::address_of(user);
+        let b0_amount = (fungible_asset::amount(&b0_asset) as u256);
+        let token_b0 = fungible_asset::metadata_from_asset(&b0_asset);
         assert!(b0_amount > 0, EINVALID_BTOKEN_AMOUNT);
         check_p_token_id_owner(p_token_id, user_addr);
         let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
         let gateway_param = borrow_global<GatewayParam>(@deri);
-        let token_b0 = gateway_param.token_b0;
 
-        let b0_asset = primary_fungible_store::withdraw(user, token_b0, (b0_amount as u64));
         vault::deposit(object::address_to_object(gateway_param.vault0), 0, b0_asset);
 
         let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
@@ -933,6 +1100,24 @@ module deri::gateway {
 
     /// Request to remove margin with specified base token.
     public entry fun request_remove_margin(
+        user: &signer,
+        p_token_id: u256,
+        b_token: Object<Metadata>,
+        b_amount: u256
+    ) acquires GatewayStorage, GatewayParam {
+        request_remove_margin_internal(user, p_token_id, b_token, b_amount);
+    }
+
+    public entry fun request_remove_margin_coin<T>(
+        user: &signer,
+        p_token_id: u256,
+        b_amount: u256
+    ) acquires GatewayStorage, GatewayParam {
+        let b_token = coin_wrapper::get_wrapper<T>();
+        request_remove_margin_internal(user, p_token_id, b_token, b_amount);
+    }
+
+    fun request_remove_margin_internal(
         user: &signer,
         p_token_id: u256,
         b_token: Object<Metadata>,
@@ -1095,12 +1280,50 @@ module deri::gateway {
         trade_params: vector<u256>,
         single_position: bool
     ) acquires GatewayStorage, GatewayParam {
-        p_token_id = request_add_margin_internal(user, p_token_id, b_token, b_amount, single_position);
+        let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
+        p_token_id = request_add_margin_internal(user, p_token_id, b_token_asset, single_position);
+        request_trade(user, p_token_id, symbol_id, trade_params);
+    }
+
+    public entry fun request_add_margin_and_trade_coin<T>(
+        user: &signer,
+        p_token_id: u256,
+        b_amount: u256,
+        symbol_id: vector<u8>,
+        trade_params: vector<u256>,
+        single_position: bool
+    ) acquires GatewayStorage, GatewayParam {
+        let b_token_coin = coin::withdraw<T>(user, (b_amount as u64));
+
+
+        p_token_id = request_add_margin_internal(user, p_token_id, coin_wrapper::wrap(b_token_coin), single_position);
         request_trade(user, p_token_id, symbol_id, trade_params);
     }
 
     /// Request to initiate a trade and simultaneously remove margin from a specified PToken.
     public entry fun request_trade_and_remove_margin(
+        user: &signer,
+        p_token_id: u256,
+        b_token: Object<Metadata>,
+        b_amount: u256,
+        symbol_id: vector<u8>,
+        trade_params: vector<u256>
+    ) acquires GatewayStorage, GatewayParam {
+        request_trade_and_remove_margin_internal(user, p_token_id, b_token, b_amount, symbol_id, trade_params);
+    }
+
+    public entry fun request_trade_and_remove_margin_coin<T>(
+        user: &signer,
+        p_token_id: u256,
+        b_amount: u256,
+        symbol_id: vector<u8>,
+        trade_params: vector<u256>
+    ) acquires GatewayStorage, GatewayParam {
+        let b_token = coin_wrapper::get_wrapper<T>();
+        request_trade_and_remove_margin_internal(user, p_token_id, b_token, b_amount, symbol_id, trade_params);
+    }
+
+    fun request_trade_and_remove_margin_internal(
         user: &signer,
         p_token_id: u256,
         b_token: Object<Metadata>,
@@ -1171,43 +1394,41 @@ module deri::gateway {
     public entry fun finish_update_liquidity(
         user: &signer, event_data: vector<u8>, signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
+        let (account_addr, b_amount_to_remove_asset) = finish_update_liquidity_internal(user, event_data, signature);
+
+        primary_fungible_store::deposit(account_addr, b_amount_to_remove_asset);
+    }
+
+    public entry fun finish_update_liquidity_coin<T>(
+        user: &signer, event_data: vector<u8>, signature: vector<u8>
+    ) acquires GatewayStorage, GatewayParam {
+        let (account_addr, fa) = finish_update_liquidity_internal(user, event_data, signature);
+
+        let b_amount_to_remove_coin = coin_wrapper::unwrap<T>(fa);
+        supra_account::deposit_coins(account_addr, b_amount_to_remove_coin);
+    }
+
+    fun finish_update_liquidity_internal(
+        user: &signer, event_data: vector<u8>, signature: vector<u8>
+    ): (address, FungibleAsset) acquires GatewayStorage, GatewayParam {
+        let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
+        let gateway_param = borrow_global<GatewayParam>(@deri);
+
         let request_id = vector_to_u256(extract_event_data(event_data, 0));
         let l_token_id = vector_to_u256(extract_event_data(event_data, 1));
         let liquidity = vector_to_u256(extract_event_data(event_data, 2));
         let total_liquidity = vector_to_u256(extract_event_data(event_data, 3));
-        let cumulative_pnl_on_engine = vector_to_u256(extract_event_data(event_data, 4));
+        let cumulative_pnl_on_engine = i256::from_uncheck(vector_to_u256(extract_event_data(event_data, 4)));
         let b_amount_to_remove = vector_to_u256(extract_event_data(event_data, 5));
 
-        let gateway_param = borrow_global<GatewayParam>(@deri);
         assert!(
             get_event_signer_address(signature, event_data) == gateway_param.d_chain_event_signer,
             ENOT_AUTHORIZED
         );
 
-        finish_update_liquidity_internal(
-            user,
-            request_id,
-            l_token_id,
-            liquidity,
-            total_liquidity,
-            i256::from_uncheck(cumulative_pnl_on_engine),
-            b_amount_to_remove
-        );
-    }
-
-    fun finish_update_liquidity_internal(
-        user: &signer,
-        request_id: u256,
-        l_token_id: u256,
-        liquidity: u256,
-        total_liquidity: u256,
-        cumulative_pnl_on_engine: I256,
-        b_amount_to_remove: u256
-    ) acquires GatewayStorage, GatewayParam {
-        let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
-        let gateway_param = borrow_global<GatewayParam>(@deri);
         let gateway_state = &mut gateway_storage.gateway_state;
         let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, l_token_id);
+        let fa_return = fungible_asset::zero(gateway_param.token_b0);
 
         check_request_id(d_token_state, request_id);
         update_liquidity(gateway_state, d_token_state, liquidity, total_liquidity);
@@ -1247,7 +1468,9 @@ module deri::gateway {
                 } else {
                     b_amount_to_remove
                 };
-                b_amount_removed = transfer_out(&mut data, gateway_param, transfer_out_amount, false);
+                let (b_amount_removed_from_transfer_out, _, fa) = transfer_out(&mut data, gateway_param, transfer_out_amount, false);
+                b_amount_removed = b_amount_removed_from_transfer_out;
+                fungible_asset::merge(&mut fa_return, fa);
             } else {
                 assert!(
                     operate_token == object::object_address(&gateway_param.token_b0),
@@ -1266,7 +1489,7 @@ module deri::gateway {
 
                     let b_amount_to_remove_asset =
                         fungible_asset::extract(&mut b_amount_removed_asset, (b_amount_to_remove as u64));
-                    primary_fungible_store::deposit(data.account, b_amount_to_remove_asset);
+                    fungible_asset::merge(&mut fa_return, b_amount_to_remove_asset);
 
                     let gateway_store = smart_table::borrow(&gateway_param.gateway_stores, gateway_param.token_b0);
                     fungible_asset::deposit(gateway_store.store, b_amount_removed_asset);
@@ -1299,17 +1522,40 @@ module deri::gateway {
                     b_amount: b_amount_removed
                 }
             )
-        }
+        };
+
+        (data.account, fa_return)
     }
 
     /// Finalize the remove of margin based on event emitted on d-chain.
     public entry fun finish_remove_margin(
         user: &signer, event_data: vector<u8>, signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
+        let (account_addr, fa) = finish_remove_margin_internal(user, event_data, signature);
+        primary_fungible_store::deposit(account_addr, fa);
+    }
+
+    public entry fun finish_remove_margin_coin<T>(
+        user: &signer, event_data: vector<u8>, signature: vector<u8>
+    ) acquires GatewayStorage, GatewayParam {
+        let (account_addr, fa) = finish_remove_margin_internal(user, event_data, signature);
+
+        let b_amount_to_remove_coin = coin_wrapper::unwrap<T>(fa);
+        supra_account::deposit_coins(account_addr, b_amount_to_remove_coin);
+    }
+
+    fun finish_remove_margin_internal(
+        user: &signer, event_data: vector<u8>, signature: vector<u8>
+    ): (address, FungibleAsset) acquires GatewayStorage, GatewayParam {
+        let user_addr = signer::address_of(user);
+        let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
+        let gateway_param = borrow_global<GatewayParam>(@deri);
+        let fa_return = fungible_asset::zero(gateway_param.token_b0);
+
         let request_id = vector_to_u256(extract_event_data(event_data, 0));
         let p_token_id = vector_to_u256(extract_event_data(event_data, 1));
         let required_margin = vector_to_u256(extract_event_data(event_data, 2));
-        let cumulative_pnl_on_engine = vector_to_u256(extract_event_data(event_data, 3));
+        let cumulative_pnl_on_engine = i256::from_uncheck(vector_to_u256(extract_event_data(event_data, 3)));
         let b_amount_to_remove = vector_to_u256(extract_event_data(event_data, 4));
 
         let gateway_param = borrow_global<GatewayParam>(@deri);
@@ -1317,28 +1563,6 @@ module deri::gateway {
             get_event_signer_address(signature, event_data) == gateway_param.d_chain_event_signer,
             ENOT_AUTHORIZED
         );
-
-        finish_remove_margin_internal(
-            user,
-            request_id,
-            p_token_id,
-            required_margin,
-            i256::from_uncheck(cumulative_pnl_on_engine),
-            b_amount_to_remove
-        );
-    }
-
-    fun finish_remove_margin_internal(
-        user: &signer,
-        request_id: u256,
-        p_token_id: u256,
-        required_margin: u256,
-        cumulative_pnl_on_engine: I256,
-        b_amount_to_remove: u256
-    ) acquires GatewayStorage, GatewayParam {
-        let user_addr = signer::address_of(user);
-        let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
-        let gateway_param = borrow_global<GatewayParam>(@deri);
 
         let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
         let b_token = d_token_state.b_token;
@@ -1367,7 +1591,8 @@ module deri::gateway {
         data.last_cumulative_pnl_on_engine = cumulative_pnl_on_engine;
 
         get_ex_params(&mut data, b_token_state, gateway_param);
-        let b_amount = transfer_out(&mut data, gateway_param, b_amount_to_remove, true);
+        let (b_amount, _, fa) = transfer_out(&mut data, gateway_param, b_amount_to_remove, true);
+        fungible_asset::merge(&mut fa_return, fa);
         assert!(
             get_d_token_liquidity(&data, gateway_param) >= required_margin,
             EINSUFFICIENT_MARGIN
@@ -1379,7 +1604,9 @@ module deri::gateway {
 
         event::emit(
             FinishRemoveMargin { request_id, p_token_id, b_token: object::object_address(&data.b_token), b_amount }
-        )
+        );
+
+        (data.account, fa_return)
     }
 
     /// Finalize the liquidation based on event emitted on d-chain.
@@ -1427,7 +1654,6 @@ module deri::gateway {
 
         let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, p_token_id);
         let b_token = d_token_state.b_token;
-        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, object::object_address(&b_token));
 
         let data =
             get_data_and_check_b_token_consistency(
@@ -1532,6 +1758,23 @@ module deri::gateway {
     public entry fun claim_reward_liquidate(
         _user: &signer, event_data: vector<u8>, signature: vector<u8>
     ) acquires GatewayParam {
+        let (account_addr, fa) = claim_reward_liquidate_internal(_user, event_data, signature);
+
+        primary_fungible_store::deposit(account_addr, fa);
+    }
+
+    public entry fun claim_reward_liquidate_coin<T>(
+        _user: &signer, event_data: vector<u8>, signature: vector<u8>
+    ) acquires GatewayParam {
+        let (account_addr, fa) = claim_reward_liquidate_internal(_user, event_data, signature);
+
+        let reward_coin = coin_wrapper::unwrap<T>(fa);
+        supra_account::deposit_coins(account_addr, reward_coin);
+    }
+
+    fun claim_reward_liquidate_internal(
+        _user: &signer, event_data: vector<u8>, signature: vector<u8>
+    ): (address, FungibleAsset) acquires GatewayParam {
         let chain_id = vector_to_u256(extract_event_data(event_data, 0));
         let module_address = from_bcs::to_address(extract_event_data(event_data, 1));
         let user_address = extract_event_data(event_data, 2);
@@ -1546,7 +1789,9 @@ module deri::gateway {
             ENOT_AUTHORIZED
         );
 
-        reward_store::claim_reward(user_address, recepient);
+        let fa = reward_store::claim_reward(user_address, gateway_param.token_b0);
+
+        (recepient, fa)
     }
 
     public fun extract_event_data(event_data: vector<u8>, position: u64): vector<u8> {
@@ -1567,13 +1812,14 @@ module deri::gateway {
     fun request_add_margin_internal(
         user: &signer,
         p_token_id: u256,
-        b_token: Object<Metadata>,
-        b_amount: u256,
+        b_token_asset: FungibleAsset,
         single_position: bool
     ): u256 acquires GatewayStorage, GatewayParam {
         let user_addr = signer::address_of(user);
         let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
         let gateway_param = borrow_global<GatewayParam>(@deri);
+        let b_token = fungible_asset::metadata_from_asset(&b_token_asset);
+        let b_amount = (fungible_asset::amount(&b_token_asset) as u256);
 
         assert!(b_amount > 0, EINVALID_BTOKEN_AMOUNT);
 
@@ -1607,7 +1853,6 @@ module deri::gateway {
                 b_token
             );
 
-        let b_token_asset = primary_fungible_store::withdraw(user, b_token, (b_amount as u64));
         deposit(&mut data, b_token_asset, gateway_param);
 
         save_data(&data, gateway_state, d_token_state);
@@ -1912,7 +2157,8 @@ module deri::gateway {
         b_amount_out: u256,
         // A flag indicating whether the transfer is for a trader (true) or not (false).
         is_td: bool
-    ): u256 {
+    ): (u256, address, FungibleAsset) {
+        let fa_return = fungible_asset::zero(gateway_param.token_b0);
         let b_amount = b_amount_out;
         let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
         let token_b0_store = get_gateway_store(gateway_param, gateway_param.token_b0);
@@ -2083,12 +2329,11 @@ module deri::gateway {
                 if (data.b_token == gateway_param.token_b0) {
                     b_amount = b_amount + b0_amount_out;
                 } else {
-                    fungible_asset::transfer(
+                    fungible_asset::merge(&mut fa_return, fungible_asset::withdraw(
                         &object::generate_signer_for_extending(&token_b0_store.store_extend_ref),
-                        token_b0_store.store,
-                        primary_fungible_store::ensure_primary_store_exists(data.account, gateway_param.token_b0),
+                        token_b_store.store,
                         (b0_amount_out as u64)
-                    )
+                    ));
                 }
             } else {
                 // Swap B0 into BX for Lp
@@ -2122,12 +2367,11 @@ module deri::gateway {
 
         // Transfer the remaining bAmount to the user's account.
         if (b_amount > 0) {
-            fungible_asset::transfer(
+            fungible_asset::merge(&mut fa_return, fungible_asset::withdraw(
                 &object::generate_signer_for_extending(&token_b_store.store_extend_ref),
                 token_b_store.store,
-                primary_fungible_store::ensure_primary_store_exists(data.account, data.b_token),
                 (b_amount as u64)
-            )
+            ));
         };
 
         // Mint IOU tokens for the trader, if any.
@@ -2135,7 +2379,7 @@ module deri::gateway {
             iou::mint(data.account, (iou_amount as u64));
         };
 
-        b_amount
+        (b_amount, data.account, fa_return)
     }
 
     /// Update liquidity-related state variables for a specific l_token
@@ -2235,11 +2479,24 @@ module deri::gateway {
         };
 
         if (u_reward > 0) {
-            let reward_excutor = u_reward * 80 / 100;
-            let reward_finisher = u_reward - reward_excutor;
+            let reward_executor = u_reward * 80 / 100;
+            let reward_finisher = u_reward - reward_executor;
+            let reward_executor_asset =
+                fungible_asset::withdraw(
+                    &object::generate_signer_for_extending(&gateway_b0_store.store_extend_ref),
+                    gateway_b0_store.store,
+                    (reward_executor as u64)
+                );
 
-            reward_store::deposit_reward(executor, (reward_excutor as u64));
-            reward_store::deposit_reward(finisher, (reward_finisher as u64));
+            let reward_finisher_asset =
+                fungible_asset::withdraw(
+                    &object::generate_signer_for_extending(&gateway_b0_store.store_extend_ref),
+                    gateway_b0_store.store,
+                    (reward_finisher as u64)
+                );
+
+            reward_store::deposit_reward(executor, reward_executor_asset);
+            reward_store::deposit_reward(finisher, reward_finisher_asset);
         };
 
         (reward, b0_amount_in)
@@ -2397,41 +2654,27 @@ module deri::gateway {
     #[test_only]
     public fun test_finish_update_liquidity(
         user: &signer,
-        request_id: u256,
-        l_token_id: u256,
-        liquidity: u256,
-        total_liquidity: u256,
-        cumulative_pnl_on_engine: I256,
-        b_amount_to_remove: u256
+        event_data: vector<u8>,
+        signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
-        finish_update_liquidity_internal(
-            user,
-            request_id,
-            l_token_id,
-            liquidity,
-            total_liquidity,
-            cumulative_pnl_on_engine,
-            b_amount_to_remove
-        )
+        let (account_addr, b_amount_to_remove_asset) = finish_update_liquidity_internal(user, event_data, signature);
+
+        primary_fungible_store::deposit(account_addr, b_amount_to_remove_asset);
     }
 
     #[test_only]
     public fun test_finish_remove_margin(
         user: &signer,
-        request_id: u256,
-        p_token_id: u256,
-        required_margin: u256,
-        cumulative_pnl_on_engine: I256,
-        b_amount_to_remove: u256
+        event_data: vector<u8>,
+        signature: vector<u8>
     ) acquires GatewayStorage, GatewayParam {
-        finish_remove_margin_internal(
+        let (account_addr, b_amount_to_remove_asset) = finish_remove_margin_internal(
             user,
-            request_id,
-            p_token_id,
-            required_margin,
-            cumulative_pnl_on_engine,
-            b_amount_to_remove
-        )
+            event_data,
+            signature
+        );
+
+        primary_fungible_store::deposit(account_addr, b_amount_to_remove_asset);
     }
 
     #[test_only]

@@ -26,8 +26,8 @@ module deri::iou {
         burn_ref: BurnRef
     }
 
-    fun init_module(deployer: &signer) {
-        let constructor_ref = &object::create_named_object(deployer, ASSET_SYMBOL);
+    fun init_module(deri_signer: &signer) {
+        let constructor_ref = &object::create_named_object(deri_signer, ASSET_SYMBOL);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             constructor_ref,
             option::none(),
@@ -42,7 +42,7 @@ module deri::iou {
         let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
         move_to(
-            deployer,
+            deri_signer,
             ManagedFungibleAsset { mint_ref, transfer_ref, burn_ref }
         );
     }

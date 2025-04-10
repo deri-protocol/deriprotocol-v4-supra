@@ -8,7 +8,6 @@ deri = "_"
 admin = "_"
 protocol_fee_manager = "_"
 liq_claim = "_"
-b0_token = "_"
 
 [dev-addresses]
 
