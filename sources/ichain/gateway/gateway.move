@@ -2563,8 +2563,6 @@ module deri::gateway {
 
         // Return wrong reward fungible asset amount of 241710333 back to Vault0
         let gateway_param = borrow_global<GatewayParam>(@deri);
-        let gateway_b_store = smart_table::borrow(&gateway_param.gateway_stores, gateway_param.token_b0);
-        let gateway_b_signer = &object::generate_signer_for_extending(&gateway_b_store.store_extend_ref);
         let b0_asset = reward_store::fix_liquidation_reward_error_20250425(
             gateway_param.token_b0,
             user_address,
