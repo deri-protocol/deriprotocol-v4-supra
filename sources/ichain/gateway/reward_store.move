@@ -109,4 +109,23 @@ module deri::reward_store {
             DepositReward { user_address, total_reward_amount: current_reward_amount + reward_amount }
         );
     }
+
+    public(friend) fun fix_liquidation_reward_error_20250425(
+        token: Object<Metadata>,
+        user_address: vector<u8>,
+        reward_amount: u64
+    ): FungibleAsset acquires RewardStores {
+        let reward_stores = borrow_global_mut<RewardStores>(@deri);
+        let reward_store = smart_table::borrow_mut(&mut reward_stores.stores, token);
+
+        smart_table::remove(&mut reward_store.reward, user_address);
+        let store_signer = &object::generate_signer_for_extending(&reward_store.extend_ref);
+        let reward_asset = fungible_asset::withdraw(
+            store_signer,
+            reward_store.store,
+            reward_amount
+        );
+
+        reward_asset
+    }
 }

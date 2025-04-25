@@ -1700,9 +1700,9 @@ module deri::gateway {
         let reward =
             calculate_reward(
                 lp_pnl,
-                gateway_param.liquidation_reward_cut_ratio,
                 gateway_param.min_liquidation_reward,
-                gateway_param.max_liquidation_reward
+                gateway_param.max_liquidation_reward,
+                gateway_param.liquidation_reward_cut_ratio
             );
         let (reward, b0_amount_in) =
             process_reward(
@@ -2478,24 +2478,35 @@ module deri::gateway {
             b0_amount_in = 0;
         };
 
-        if (u_reward > 0) {
-            let reward_executor = u_reward * 80 / 100;
-            let reward_finisher = u_reward - reward_executor;
-            let reward_executor_asset =
-                fungible_asset::withdraw(
-                    &object::generate_signer_for_extending(&gateway_b0_store.store_extend_ref),
-                    gateway_b0_store.store,
-                    (reward_executor as u64)
-                );
+        // if (u_reward > 0) {
+        //     let reward_executor = u_reward * 80 / 100;
+        //     let reward_finisher = u_reward - reward_executor;
+        //     let reward_executor_asset =
+        //         fungible_asset::withdraw(
+        //             &object::generate_signer_for_extending(&gateway_b0_store.store_extend_ref),
+        //             gateway_b0_store.store,
+        //             (reward_executor as u64)
+        //         );
 
+        //     let reward_finisher_asset =
+        //         fungible_asset::withdraw(
+        //             &object::generate_signer_for_extending(&gateway_b0_store.store_extend_ref),
+        //             gateway_b0_store.store,
+        //             (reward_finisher as u64)
+        //         );
+
+        //     reward_store::deposit_reward(executor, reward_executor_asset);
+        //     reward_store::deposit_reward(finisher, reward_finisher_asset);
+        // };
+
+        /// Only reward finisher, as executor is an EVM address
+        if (u_reward > 0) {
             let reward_finisher_asset =
                 fungible_asset::withdraw(
                     &object::generate_signer_for_extending(&gateway_b0_store.store_extend_ref),
                     gateway_b0_store.store,
-                    (reward_finisher as u64)
+                    (u_reward as u64)
                 );
-
-            reward_store::deposit_reward(executor, reward_executor_asset);
             reward_store::deposit_reward(finisher, reward_finisher_asset);
         };
 
@@ -2541,6 +2552,39 @@ module deri::gateway {
             cumulative_unused_i_chain_execution_fee: 0,
             current_operate_token: ZERO_ADDRESS
         }
+    }
+
+    /// Revert the changes due to liquidation reward calculation error on 20250425
+    public entry fun fix_liquidation_reward_error_20250425(admin: &signer) acquires GatewayParam, GatewayStorage {
+        global_state::assert_is_admin(admin);
+
+        let user_address: vector<u8> = x"000000000000000000000000db744342500024b3d5c401151e24636023b17fcb";
+        let reward_amount: u64 = 241710333;
+
+        // Return wrong reward fungible asset amount of 241710333 back to Vault0
+        let gateway_param = borrow_global<GatewayParam>(@deri);
+        let gateway_b_store = smart_table::borrow(&gateway_param.gateway_stores, gateway_param.token_b0);
+        let gateway_b_signer = &object::generate_signer_for_extending(&gateway_b_store.store_extend_ref);
+        let b0_asset = reward_store::fix_liquidation_reward_error_20250425(
+            gateway_param.token_b0,
+            user_address,
+            reward_amount
+        );
+        vault::deposit(
+            object::address_to_object<Vault>(gateway_param.vault0),
+            0,
+            b0_asset
+        );
+
+        // Correct cumulative_pnl_on_gateway, adding reward_amount back since we are returning this amount to Vault0
+        let decimals_b0 = fungible_asset::decimals(gateway_param.token_b0);
+        let gateway_storage = borrow_global_mut<GatewayStorage>(@deri);
+        let gateway_state = &mut gateway_storage.gateway_state;
+        let new_cumulative_pnl_on_gateway = i256::wrapping_add(
+            gateway_state.cumulative_pnl_on_gateway,
+            i256::rescale(i256::from((reward_amount as u256)), decimals_b0, SCALE_DECIMALS)
+        );
+        gateway_state.cumulative_pnl_on_gateway = new_cumulative_pnl_on_gateway;
     }
 
     #[test_only]
