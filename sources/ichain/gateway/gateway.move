@@ -1054,6 +1054,7 @@ module deri::gateway {
         request_add_margin_internal(user, p_token_id, coin_wrapper::wrap(b_token_coin), single_position);
     }
 
+    #[deprecated]
     public entry fun request_add_margin_b0(user: &signer, p_token_id: u256, b0_amount: u256) acquires GatewayParam, GatewayStorage {
         let gateway_param = borrow_global<GatewayParam>(@deri);
         let token_b0 = gateway_param.token_b0;
@@ -1062,6 +1063,7 @@ module deri::gateway {
         request_add_margin_b0_internal(user, p_token_id, b0_asset);
     }
 
+    #[deprecated]
     public entry fun request_add_margin_b0_coin<T>(user: &signer, p_token_id: u256, b0_amount: u256) acquires GatewayParam, GatewayStorage {
         let b0_coin = coin::withdraw<T>(user, (b0_amount as u64));
         let b0_asset = coin_wrapper::wrap(b0_coin);
