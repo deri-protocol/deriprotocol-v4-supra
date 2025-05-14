@@ -910,15 +910,8 @@ module deri::gateway {
             );
 
         let request_add_liquidity_fee = gateway_storage.execution_fees.request_add_liquidity;
-        // On Aptos, the APT amount must be retrieved in code, unlike EVM's msg.value, which is not used.
-        let apt_amount =
-            if (get_aptos_coin_wrapper() == b_token) {
-                request_add_liquidity_fee + b_amount
-            } else {
-                request_add_liquidity_fee
-            };
 
-        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<SupraCoin>(user, (apt_amount as u64)));
+        let apt_fee_asset = coin_wrapper::wrap(coin::withdraw<SupraCoin>(user, (request_add_liquidity_fee as u64)));
         let apt_amount =
             receive_execution_fee(
                 d_token_state,
