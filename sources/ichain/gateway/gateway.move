@@ -2326,7 +2326,7 @@ module deri::gateway {
                 } else {
                     fungible_asset::merge(&mut fa_return, fungible_asset::withdraw(
                         &object::generate_signer_for_extending(&token_b0_store.store_extend_ref),
-                        token_b_store.store,
+                        token_b0_store.store,
                         (b0_amount_out as u64)
                     ));
                 }
