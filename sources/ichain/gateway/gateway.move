@@ -975,8 +975,14 @@ module deri::gateway {
         let gateway_param = borrow_global<GatewayParam>(@deri);
 
         let gateway_state = &mut gateway_storage.gateway_state;
-        let b_token_state = smart_table::borrow(&gateway_storage.b_token_states, b_token_address);
         let d_token_state = smart_table::borrow_mut(&mut gateway_storage.d_token_states, l_token_id);
+        // original_b_token user is deposit b token, not current operate token, which is `b_token`
+        // for example, original_b_token may be ETH, lp initially deposited ETH to provide liquidity
+        // later, LP may request to remove ETH, or token b0 USDC which is his cumulated PNL
+        // note: currently we only have token b0, this functionality is not supported yet, so original_b_token === b_token
+        let original_b_token = d_token_state.b_token;
+        let original_b_token_address = object::object_address(&original_b_token);
+        let original_b_token_state = smart_table::borrow(&gateway_storage.b_token_states, original_b_token_address);
 
         let request_remove_liquidity_fee = gateway_storage.execution_fees.request_remove_liquidity;
         let apt_fee_asset = coin_wrapper::wrap(
@@ -993,14 +999,14 @@ module deri::gateway {
 
         let data = get_data(
             gateway_state,
-            b_token_state,
+            original_b_token_state,
             d_token_state,
             user_address,
             l_token_id,
-            b_token
+            original_b_token
         );
 
-        get_ex_params(&mut data, b_token_state, gateway_param);
+        get_ex_params(&mut data, original_b_token_state, gateway_param);
         let old_liquidity = get_d_token_liquidity(&data, gateway_param);
         let new_liquidity =
             if (data.b_token == b_token) {
@@ -2326,7 +2332,7 @@ module deri::gateway {
                 } else {
                     fungible_asset::merge(&mut fa_return, fungible_asset::withdraw(
                         &object::generate_signer_for_extending(&token_b0_store.store_extend_ref),
-                        token_b_store.store,
+                        token_b0_store.store,
                         (b0_amount_out as u64)
                     ));
                 }
