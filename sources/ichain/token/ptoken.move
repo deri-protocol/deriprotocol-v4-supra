@@ -82,10 +82,19 @@ module deri::ptoken {
 
     #[view]
     public fun get_token_address(token_id: u256): address acquires CollectionConfig {
+        let collection_config = borrow_global<CollectionConfig>(@deri);
+        let total_minted_value = token_id - collection_config.base_token_id;
+
+        let token_name_string = if (total_minted_value < 128) {
+            string::utf8(bcs::to_bytes(&token_id))
+        } else {
+            string_utils::to_string(&token_id)
+        };
+
         let seed =
             token::create_token_seed(
                 &string::utf8(PTOKEN_COLLECTION_NAME),
-                &string::utf8(bcs::to_bytes(&token_id))
+                &token_name_string
             );
         let signer_addr = signer::address_of(creator_signer());
         object::create_object_address(&signer_addr, seed)
@@ -107,12 +116,18 @@ module deri::ptoken {
         let collection_config = borrow_global_mut<CollectionConfig>(@deri);
         collection_config.total_minted = collection_config.total_minted + 1;
 
+        let token_name = if (collection_config.total_minted < 128) {
+            string::utf8(bcs::to_bytes(&(collection_config.base_token_id + collection_config.total_minted)))
+        } else {
+            string_utils::to_string(&(collection_config.base_token_id + collection_config.total_minted))
+        };
+
         let nft =
             &token::create_named_token(
                 &object::generate_signer_for_extending(&collection_config.creator),
                 string::utf8(PTOKEN_COLLECTION_NAME),
                 string::utf8(PTOKEN_COLLECTION_DESC),
-                string_utils::to_string(&(collection_config.base_token_id + collection_config.total_minted)),
+                token_name,
                 option::none(),
                 string::utf8(URI)
             );
