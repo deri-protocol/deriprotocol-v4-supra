@@ -14,6 +14,7 @@ module deri::ltoken {
     use std::option;
     use std::signer;
     use std::string;
+    use aptos_std::string_utils;
 
     friend deri::gateway;
 
@@ -112,7 +113,7 @@ module deri::ltoken {
                 &object::generate_signer_for_extending(&collection_config.creator),
                 string::utf8(LTOKEN_COLLECTION_NAME),
                 string::utf8(LTOKEN_COLLECTION_DESC),
-                string::utf8(bcs::to_bytes(&(collection_config.base_token_id + collection_config.total_minted))),
+                string_utils::to_string(&(collection_config.base_token_id + collection_config.total_minted)),
                 option::none(),
                 string::utf8(URI)
             );
