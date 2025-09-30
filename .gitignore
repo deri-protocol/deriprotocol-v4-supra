@@ -2,3 +2,6 @@
 build/
 .idea
 *.json
+\[*\]/
+*data*
+*temp*
