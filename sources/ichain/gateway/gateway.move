@@ -1747,7 +1747,7 @@ module deri::gateway {
             d_token_state.cumulative_unused_i_chain_execution_fee = 0;
 
             gateway_state.total_i_chain_execution_fee = gateway_state.total_i_chain_execution_fee
-                - last_request_ichain_execution_fee + cumulative_unused_i_chain_execution_fee
+                - (last_request_ichain_execution_fee + cumulative_unused_i_chain_execution_fee)
         };
 
         ptoken::burn(p_token_id);
