@@ -89,6 +89,8 @@ module deri::gateway {
     const EINVALID_CHAIN_ID: u64 = 13;
     /// Invalid operation token
     const EINVALID_OPERATE_TOKEN: u64 = 14;
+    /// Deprecated
+    const EDEPRECATED: u64 = 1001;
 
     #[resource_group_member(group = supra_framework::object::ObjectGroup)]
     struct GatewayStorage has key {
@@ -1061,20 +1063,22 @@ module deri::gateway {
     }
 
     #[deprecated]
-    public entry fun request_add_margin_b0(user: &signer, p_token_id: u256, b0_amount: u256) acquires GatewayParam, GatewayStorage {
-        let gateway_param = borrow_global<GatewayParam>(@deri);
-        let token_b0 = gateway_param.token_b0;
-        let b0_asset = primary_fungible_store::withdraw(user, token_b0, (b0_amount as u64));
+    public entry fun request_add_margin_b0(user: &signer, p_token_id: u256, b0_amount: u256) {
+        // let gateway_param = borrow_global<GatewayParam>(@deri);
+        // let token_b0 = gateway_param.token_b0;
+        // let b0_asset = primary_fungible_store::withdraw(user, token_b0, (b0_amount as u64));
 
-        request_add_margin_b0_internal(user, p_token_id, b0_asset);
+        // request_add_margin_b0_internal(user, p_token_id, b0_asset);
+        abort error::aborted(EDEPRECATED)
     }
 
     #[deprecated]
-    public entry fun request_add_margin_b0_coin<T>(user: &signer, p_token_id: u256, b0_amount: u256) acquires GatewayParam, GatewayStorage {
-        let b0_coin = coin::withdraw<T>(user, (b0_amount as u64));
-        let b0_asset = coin_wrapper::wrap(b0_coin);
+    public entry fun request_add_margin_b0_coin<T>(user: &signer, p_token_id: u256, b0_amount: u256) {
+        // let b0_coin = coin::withdraw<T>(user, (b0_amount as u64));
+        // let b0_asset = coin_wrapper::wrap(b0_coin);
 
-        request_add_margin_b0_internal(user, p_token_id, b0_asset);
+        // request_add_margin_b0_internal(user, p_token_id, b0_asset);
+        abort error::aborted(EDEPRECATED)
     }
 
     fun request_add_margin_b0_internal(user: &signer, p_token_id: u256, b0_asset: FungibleAsset) acquires GatewayParam, GatewayStorage {
